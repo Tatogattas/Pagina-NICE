@@ -28,6 +28,7 @@ export default defineConfig(() => {
         },
       },
     ],
+    base: '/Pagina-NICE/'
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
