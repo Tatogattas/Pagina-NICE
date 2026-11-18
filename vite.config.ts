@@ -32,7 +32,15 @@ export default defineConfig(({command, isPreview}) => {
         },
       },
     ],
-    base: command === 'serve' && !isPreview ? '/' : '/Pagina-NICE/',
+    base:
+      command === 'serve' && !isPreview
+        ? '/'
+        : process.env.VITE_BASE_PATH || '/Pagina-NICE/',
+    build: {
+      outDir: 'dist',
+      assetsDir: 'assets',
+      emptyOutDir: true,
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
