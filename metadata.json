@@ -1,0 +1,6 @@
+{
+  "name": "Monolito — Estudio Visual",
+  "description": "Landing page minimalista en azul, negro y blanco con video incrustado y galería de imágenes mediante enlaces externos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
