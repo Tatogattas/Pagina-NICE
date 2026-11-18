@@ -35,7 +35,7 @@ export default defineConfig(({command, isPreview}) => {
     base:
       command === 'serve' && !isPreview
         ? '/'
-        : process.env.VITE_BASE_PATH || '/Pagina-NICE/',
+        : process.env.VITE_BASE_PATH || './',
     build: {
       outDir: 'dist',
       assetsDir: 'assets',

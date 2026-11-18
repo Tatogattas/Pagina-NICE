@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - master
   workflow_dispatch:
 
 permissions:
@@ -36,6 +37,8 @@ jobs:
           fi
 
       - name: Build for GitHub Pages
+        env:
+          VITE_BASE_PATH: /Pagina-NICE/
         run: bun run build
 
       - name: Upload Pages artifact
