@@ -2,15 +2,18 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
+import {fileURLToPath} from 'url';
 import {defineConfig} from 'vite';
+
+const rootDir = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig(({command, isPreview}) => {
   return {
     plugins: [
       react(),
       tailwindcss(),
-      // Copies src/assets into dist/ if present, and prepares GitHub Pages
-      // SPA fallback (404.html + .nojekyll) in dist/.
+      // Copies src/assets into dist/ if present, and emits GitHub Pages
+      // SPA fallback (404.html) and .nojekyll marker in dist/.
       {
         name: 'github-pages-and-assets-support',
         apply: 'build',
@@ -18,8 +21,8 @@ export default defineConfig(({command, isPreview}) => {
           if (error) {
             return;
           }
-          const distDir = path.resolve(__dirname, 'dist');
-          const srcAssets = path.resolve(__dirname, 'src/assets');
+          const distDir = path.resolve(rootDir, 'dist');
+          const srcAssets = path.resolve(rootDir, 'src/assets');
           const distAssets = path.resolve(distDir, 'src/assets');
           if (fs.existsSync(distDir) && fs.existsSync(srcAssets)) {
             fs.cpSync(srcAssets, distAssets, {recursive: true, force: true});
@@ -40,10 +43,17 @@ export default defineConfig(({command, isPreview}) => {
       outDir: 'dist',
       assetsDir: 'assets',
       emptyOutDir: true,
+      rollupOptions: {
+        output: {
+          entryFileNames: 'assets/[name]-[hash].js',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash][extname]',
+        },
+      },
     },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': rootDir,
       },
     },
     server: {

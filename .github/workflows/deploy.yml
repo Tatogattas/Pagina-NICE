@@ -31,13 +31,14 @@ jobs:
       - name: Install dependencies
         run: |
           if [ -f bun.lock ] || [ -f bun.lockb ]; then
-            bun install --frozen-lockfile
+            bun install --frozen-lockfile || bun install
           else
             bun install
           fi
 
-      - name: Build for GitHub Pages
+      - name: Build static site for GitHub Pages
         env:
+          NODE_ENV: production
           VITE_BASE_PATH: /Pagina-NICE/
         run: bun run build
 
