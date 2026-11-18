@@ -4,16 +4,15 @@ import fs from 'fs';
 import path from 'path';
 import {defineConfig} from 'vite';
 
-export default defineConfig(() => {
+export default defineConfig(({command, isPreview}) => {
   return {
     plugins: [
       react(),
       tailwindcss(),
-      // Copies src/assets into dist/ so root-relative URLs like
-      // "/src/assets/images/..." (e.g. generate_image output) still resolve
-      // in production builds. Do not remove.
+      // Copies src/assets into dist/ if present, and prepares GitHub Pages
+      // SPA fallback (404.html + .nojekyll) in dist/.
       {
-        name: 'copy-unbundled-src-assets',
+        name: 'github-pages-and-assets-support',
         apply: 'build',
         closeBundle(error?: Error): void {
           if (error) {
@@ -25,10 +24,15 @@ export default defineConfig(() => {
           if (fs.existsSync(distDir) && fs.existsSync(srcAssets)) {
             fs.cpSync(srcAssets, distAssets, {recursive: true, force: true});
           }
+          const distIndex = path.resolve(distDir, 'index.html');
+          if (fs.existsSync(distIndex)) {
+            fs.copyFileSync(distIndex, path.resolve(distDir, '404.html'));
+            fs.writeFileSync(path.resolve(distDir, '.nojekyll'), '');
+          }
         },
       },
     ],
-    base: '/Pagina-NICE/'
+    base: command === 'serve' && !isPreview ? '/' : '/Pagina-NICE/',
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
