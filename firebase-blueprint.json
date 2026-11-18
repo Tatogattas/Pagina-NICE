@@ -1,0 +1,89 @@
+{
+  "entities": {
+    "SiteContent": {
+      "title": "SiteContent",
+      "description": "Published landing page copy, embedded external video link, and external gallery items.",
+      "type": "object",
+      "properties": {
+        "brandName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "heroKicker": { "type": "string", "maxLength": 120 },
+        "heroTitle": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "heroDescription": { "type": "string", "maxLength": 600 },
+        "heroCtaLabel": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "videoUrl": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 1000,
+          "pattern": "^https?://.+"
+        },
+        "videoTitle": { "type": "string", "maxLength": 200 },
+        "heroPillars": { "type": "array" },
+        "galleryKicker": { "type": "string", "maxLength": 120 },
+        "galleryTitle": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "galleryDescription": { "type": "string", "maxLength": 600 },
+        "galleryItems": { "type": "array" },
+        "approachKicker": { "type": "string", "maxLength": 120 },
+        "approachTitle": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "approachDescription": { "type": "string", "maxLength": 600 },
+        "approachItems": { "type": "array" },
+        "contactKicker": { "type": "string", "maxLength": 120 },
+        "contactTitle": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "contactDescription": { "type": "string", "maxLength": 600 },
+        "contactEmail": { "type": "string", "maxLength": 160 },
+        "contactLocation": { "type": "string", "maxLength": 160 },
+        "footerTagline": { "type": "string", "maxLength": 300 },
+        "footerCopyright": { "type": "string", "maxLength": 120 },
+        "updatedByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "brandName",
+        "heroKicker",
+        "heroTitle",
+        "heroDescription",
+        "heroCtaLabel",
+        "videoUrl",
+        "videoTitle",
+        "heroPillars",
+        "galleryKicker",
+        "galleryTitle",
+        "galleryDescription",
+        "galleryItems",
+        "approachKicker",
+        "approachTitle",
+        "approachDescription",
+        "approachItems",
+        "contactKicker",
+        "contactTitle",
+        "contactDescription",
+        "contactEmail",
+        "contactLocation",
+        "footerTagline",
+        "footerCopyright",
+        "updatedByUid",
+        "updatedAt"
+      ]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Authorized administrator registry entry.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "email": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/siteContent/{contentId}": {
+      "schema": { "$ref": "#/entities/SiteContent" },
+      "description": "Publicly readable published landing page document ('main') writable only by verified administrators."
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Authorized administrator directory readable and writable only by administrators."
+    }
+  }
+}

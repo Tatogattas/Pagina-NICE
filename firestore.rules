@@ -1,0 +1,177 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn()
+        && request.auth.token.email == 'taroret134@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin()
+        || (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isValidSiteContent(data) {
+      return data.keys().hasAll([
+          'brandName',
+          'heroKicker',
+          'heroTitle',
+          'heroDescription',
+          'heroCtaLabel',
+          'videoUrl',
+          'videoTitle',
+          'heroPillars',
+          'galleryKicker',
+          'galleryTitle',
+          'galleryDescription',
+          'galleryItems',
+          'approachKicker',
+          'approachTitle',
+          'approachDescription',
+          'approachItems',
+          'contactKicker',
+          'contactTitle',
+          'contactDescription',
+          'contactEmail',
+          'contactLocation',
+          'footerTagline',
+          'footerCopyright',
+          'updatedByUid',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'brandName',
+          'heroKicker',
+          'heroTitle',
+          'heroDescription',
+          'heroCtaLabel',
+          'videoUrl',
+          'videoTitle',
+          'heroPillars',
+          'galleryKicker',
+          'galleryTitle',
+          'galleryDescription',
+          'galleryItems',
+          'approachKicker',
+          'approachTitle',
+          'approachDescription',
+          'approachItems',
+          'contactKicker',
+          'contactTitle',
+          'contactDescription',
+          'contactEmail',
+          'contactLocation',
+          'footerTagline',
+          'footerCopyright',
+          'updatedByUid',
+          'updatedAt'
+        ])
+        && data.brandName is string && data.brandName.size() >= 1 && data.brandName.size() <= 80
+        && data.heroKicker is string && data.heroKicker.size() <= 120
+        && data.heroTitle is string && data.heroTitle.size() >= 1 && data.heroTitle.size() <= 200
+        && data.heroDescription is string && data.heroDescription.size() <= 600
+        && data.heroCtaLabel is string && data.heroCtaLabel.size() >= 1 && data.heroCtaLabel.size() <= 60
+        && data.videoUrl is string && data.videoUrl.size() >= 8 && data.videoUrl.size() <= 1000 && data.videoUrl.matches('^https?://.+')
+        && data.videoTitle is string && data.videoTitle.size() <= 200
+        && data.heroPillars is list && data.heroPillars.size() <= 6 && (data.heroPillars.size() == 0 || data.heroPillars[0] is map)
+        && data.galleryKicker is string && data.galleryKicker.size() <= 120
+        && data.galleryTitle is string && data.galleryTitle.size() >= 1 && data.galleryTitle.size() <= 200
+        && data.galleryDescription is string && data.galleryDescription.size() <= 600
+        && data.galleryItems is list && data.galleryItems.size() <= 50 && (data.galleryItems.size() == 0 || data.galleryItems[0] is map)
+        && data.approachKicker is string && data.approachKicker.size() <= 120
+        && data.approachTitle is string && data.approachTitle.size() >= 1 && data.approachTitle.size() <= 200
+        && data.approachDescription is string && data.approachDescription.size() <= 600
+        && data.approachItems is list && data.approachItems.size() <= 10 && (data.approachItems.size() == 0 || data.approachItems[0] is map)
+        && data.contactKicker is string && data.contactKicker.size() <= 120
+        && data.contactTitle is string && data.contactTitle.size() >= 1 && data.contactTitle.size() <= 200
+        && data.contactDescription is string && data.contactDescription.size() <= 600
+        && data.contactEmail is string && data.contactEmail.size() <= 160
+        && data.contactLocation is string && data.contactLocation.size() <= 160
+        && data.footerTagline is string && data.footerTagline.size() <= 300
+        && data.footerCopyright is string && data.footerCopyright.size() <= 120
+        && data.updatedByUid is string && data.updatedByUid.size() >= 1 && data.updatedByUid.size() <= 128 && data.updatedByUid == request.auth.uid
+        && data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+
+    function isValidAdminRecord(data, adminUid) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'email', 'createdAt'])
+        && data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid == adminUid
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.createdAt is timestamp && data.createdAt == request.time;
+    }
+
+    match /siteContent/{contentId} {
+      allow get: if isValidId(contentId) && contentId == 'main';
+      allow list: if false;
+      allow create: if isValidId(contentId)
+        && contentId == 'main'
+        && isAdmin()
+        && isValidSiteContent(incoming());
+      allow update: if isValidId(contentId)
+        && contentId == 'main'
+        && isAdmin()
+        && isValidSiteContent(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'brandName',
+          'heroKicker',
+          'heroTitle',
+          'heroDescription',
+          'heroCtaLabel',
+          'videoUrl',
+          'videoTitle',
+          'heroPillars',
+          'galleryKicker',
+          'galleryTitle',
+          'galleryDescription',
+          'galleryItems',
+          'approachKicker',
+          'approachTitle',
+          'approachDescription',
+          'approachItems',
+          'contactKicker',
+          'contactTitle',
+          'contactDescription',
+          'contactEmail',
+          'contactLocation',
+          'footerTagline',
+          'footerCopyright',
+          'updatedByUid',
+          'updatedAt'
+        ]);
+      allow delete: if isValidId(contentId) && contentId == 'main' && isAdmin();
+    }
+
+    match /admins/{adminUid} {
+      allow get: if isValidId(adminUid) && isAdmin();
+      allow list: if false;
+      allow create: if isValidId(adminUid)
+        && isAdmin()
+        && isValidAdminRecord(incoming(), adminUid);
+      allow update: if false;
+      allow delete: if isValidId(adminUid) && isAdmin() && adminUid != request.auth.uid;
+    }
+  }
+}

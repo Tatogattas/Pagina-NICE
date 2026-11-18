@@ -1,7 +1,10 @@
+import type {User} from 'firebase/auth';
+import {signInWithPopup} from 'firebase/auth';
 import {
   ArrowDown,
   ArrowUp,
   Check,
+  Cloud,
   Download,
   LogOut,
   Pencil,
@@ -18,6 +21,7 @@ import {
   type GalleryItem,
 } from '../data/externalMedia';
 import type {SiteContentConfig} from '../data/siteConfig';
+import {auth, googleProvider} from '../firebase';
 
 type EditorTab = 'hero' | 'gallery' | 'sections';
 
@@ -27,9 +31,10 @@ interface AdminPanelModalProps {
   editingGalleryItemId?: string | null;
   config: SiteContentConfig;
   adminUser: string;
+  firebaseUser: User | null;
   onClose: () => void;
-  onUpdateConfig: (next: SiteContentConfig) => void;
-  onResetConfig: () => void;
+  onPublishConfig: (next: SiteContentConfig) => Promise<void>;
+  onResetConfig: () => Promise<void>;
   onLogout: () => void;
 }
 
@@ -39,8 +44,9 @@ export function AdminPanelModal({
   editingGalleryItemId = null,
   config,
   adminUser,
+  firebaseUser,
   onClose,
-  onUpdateConfig,
+  onPublishConfig,
   onResetConfig,
   onLogout,
 }: AdminPanelModalProps) {
@@ -48,6 +54,8 @@ export function AdminPanelModal({
   const [draft, setDraft] = useState<SiteContentConfig>(config);
   const [savedFeedback, setSavedFeedback] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [connectingGoogle, setConnectingGoogle] = useState(false);
 
   // Add / edit single gallery item form
   const [selectedItemId, setSelectedItemId] = useState<string | null>(
@@ -109,10 +117,67 @@ export function AdminPanelModal({
 
   function flashSaved(msg: string) {
     setSavedFeedback(msg);
-    setTimeout(() => setSavedFeedback(null), 2600);
+    setTimeout(() => setSavedFeedback(null), 3000);
   }
 
-  const handleSaveGeneral = (e: FormEvent) => {
+  async function ensureCloudAuth(): Promise<boolean> {
+    if (auth.currentUser) return true;
+    setConnectingGoogle(true);
+    setErrorMsg(null);
+    try {
+      await signInWithPopup(auth, googleProvider);
+      return true;
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'Error al autenticar con Google.';
+      if (msg.includes('unauthorized-domain')) {
+        setErrorMsg(
+          'Este dominio aún no está autorizado en Firebase Auth. Agrégalo en Firebase Console → Authentication → Settings → Authorized domains.'
+        );
+      } else {
+        setErrorMsg(
+          'Conecta tu cuenta de Google autorizada (taroret134@gmail.com) para publicar cambios para todos los visitantes.'
+        );
+      }
+      return false;
+    } finally {
+      setConnectingGoogle(false);
+    }
+  }
+
+  async function persistChanges(
+    nextConfig: SiteContentConfig,
+    successText: string
+  ): Promise<boolean> {
+    setErrorMsg(null);
+    const authed = await ensureCloudAuth();
+    if (!authed) return false;
+
+    setSaving(true);
+    try {
+      await onPublishConfig(nextConfig);
+      flashSaved(successText);
+      return true;
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : String(err);
+      if (raw.includes('Quota exceeded')) {
+        setErrorMsg(
+          'Se alcanzó el límite diario gratuito de escrituras en Firestore. Se restablecerá mañana.'
+        );
+      } else if (raw.includes('Missing or insufficient permissions')) {
+        setErrorMsg(
+          'Tu cuenta de Google actual no tiene permisos de administrador. Inicia sesión con taroret134@gmail.com.'
+        );
+      } else {
+        setErrorMsg('No se pudo publicar en la nube. Revisa tu conexión.');
+      }
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const handleSaveGeneral = async (e: FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     const parsedVideo = parseExternalVideoUrl(draft.videoUrl);
@@ -123,11 +188,13 @@ export function AdminPanelModal({
       );
       return;
     }
-    onUpdateConfig(draft);
-    flashSaved('Cambios guardados correctamente.');
+    await persistChanges(
+      draft,
+      'Publicado en la nube: todos los visitantes ya ven los cambios.'
+    );
   };
 
-  const handleSaveGalleryItem = (e: FormEvent) => {
+  const handleSaveGalleryItem = async (e: FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -171,10 +238,16 @@ export function AdminPanelModal({
     }
 
     const updated = {...draft, galleryItems: nextItems};
-    setDraft(updated);
-    onUpdateConfig(updated);
-    resetItemForm();
-    flashSaved(selectedItemId ? 'Imagen actualizada.' : 'Imagen añadida a la galería.');
+    const ok = await persistChanges(
+      updated,
+      selectedItemId
+        ? 'Imagen actualizada y publicada para todos.'
+        : 'Imagen añadida y publicada para todos.'
+    );
+    if (ok) {
+      setDraft(updated);
+      resetItemForm();
+    }
   };
 
   const handleStartEditItem = (item: GalleryItem) => {
@@ -188,26 +261,43 @@ export function AdminPanelModal({
     setErrorMsg(null);
   };
 
-  const handleDeleteItem = (id: string) => {
+  const handleDeleteItem = async (id: string) => {
     const nextItems = draft.galleryItems.filter((item) => item.id !== id);
     const updated = {...draft, galleryItems: nextItems};
-    setDraft(updated);
-    onUpdateConfig(updated);
-    if (selectedItemId === id) {
-      resetItemForm();
+    const ok = await persistChanges(updated, 'Imagen eliminada para todos.');
+    if (ok) {
+      setDraft(updated);
+      if (selectedItemId === id) {
+        resetItemForm();
+      }
     }
-    flashSaved('Imagen eliminada.');
   };
 
-  const handleMoveItem = (index: number, direction: -1 | 1) => {
+  const handleMoveItem = async (index: number, direction: -1 | 1) => {
     const target = index + direction;
     if (target < 0 || target >= draft.galleryItems.length) return;
     const nextItems = [...draft.galleryItems];
     const [moved] = nextItems.splice(index, 1);
     nextItems.splice(target, 0, moved);
     const updated = {...draft, galleryItems: nextItems};
-    setDraft(updated);
-    onUpdateConfig(updated);
+    const ok = await persistChanges(updated, 'Orden actualizado en la nube.');
+    if (ok) {
+      setDraft(updated);
+    }
+  };
+
+  const handleReset = async () => {
+    const authed = await ensureCloudAuth();
+    if (!authed) return;
+    setSaving(true);
+    try {
+      await onResetConfig();
+      flashSaved('Contenido restaurado y publicado para todos.');
+    } catch {
+      setErrorMsg('No se pudo restaurar el contenido en la nube.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleExportJson = () => {
@@ -242,8 +332,9 @@ export function AdminPanelModal({
               Panel de administración
             </h2>
             <p className="text-xs text-slate-400">
-              Conectado como <span className="text-white">{adminUser}</span> ·
-              Edición completa de textos, video y galería
+              Administrador: <span className="text-white">{adminUser}</span> ·
+              Los cambios publicados se sincronizan en tiempo real con todos los
+              visitantes
             </p>
           </div>
 
@@ -280,9 +371,41 @@ export function AdminPanelModal({
           </div>
         </div>
 
+        {/* Cloud Publish Status Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-[#F4F7FC] px-6 py-2.5 text-xs">
+          <div className="flex items-center gap-2 text-slate-700">
+            <Cloud className="h-4 w-4 text-[#2563EB]" aria-hidden="true" />
+            {firebaseUser ? (
+              <span>
+                Publicación en la nube conectada como{' '}
+                <strong className="text-[#07090E]">{firebaseUser.email}</strong>
+              </span>
+            ) : (
+              <span>
+                Conecta tu cuenta Google autorizada para guardar cambios globales
+                en la web pública.
+              </span>
+            )}
+          </div>
+
+          {!firebaseUser && (
+            <button
+              type="button"
+              onClick={() => void ensureCloudAuth()}
+              disabled={connectingGoogle}
+              className="rounded-lg bg-[#2563EB] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8] disabled:opacity-60"
+            >
+              {connectingGoogle ? 'Conectando...' : 'Conectar cuenta Google'}
+            </button>
+          )}
+        </div>
+
         {/* Navigation Tabs */}
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-slate-50 px-6 py-3">
-          <div role="tablist" className="flex flex-wrap gap-1 rounded-lg bg-slate-200/70 p-1">
+          <div
+            role="tablist"
+            className="flex flex-wrap gap-1 rounded-lg bg-slate-200/70 p-1"
+          >
             {(
               [
                 {id: 'hero', label: 'Portada y Video'},
@@ -312,11 +435,9 @@ export function AdminPanelModal({
 
           <button
             type="button"
-            onClick={() => {
-              onResetConfig();
-              flashSaved('Contenido restaurado a los valores iniciales.');
-            }}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 transition-colors hover:text-[#2563EB]"
+            disabled={saving}
+            onClick={() => void handleReset()}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 transition-colors hover:text-[#2563EB] disabled:opacity-50"
           >
             <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
             <span>Restaurar valores iniciales</span>
@@ -352,6 +473,7 @@ export function AdminPanelModal({
                   <input
                     type="text"
                     required
+                    maxLength={80}
                     value={draft.brandName}
                     onChange={(e) =>
                       setDraft({...draft, brandName: e.target.value})
@@ -365,6 +487,7 @@ export function AdminPanelModal({
                   </label>
                   <input
                     type="text"
+                    maxLength={120}
                     value={draft.heroKicker}
                     onChange={(e) =>
                       setDraft({...draft, heroKicker: e.target.value})
@@ -382,6 +505,7 @@ export function AdminPanelModal({
                   <input
                     type="text"
                     required
+                    maxLength={200}
                     value={draft.heroTitle}
                     onChange={(e) =>
                       setDraft({...draft, heroTitle: e.target.value})
@@ -396,6 +520,7 @@ export function AdminPanelModal({
                   <input
                     type="text"
                     required
+                    maxLength={60}
                     value={draft.heroCtaLabel}
                     onChange={(e) =>
                       setDraft({...draft, heroCtaLabel: e.target.value})
@@ -411,6 +536,7 @@ export function AdminPanelModal({
                 </label>
                 <textarea
                   rows={3}
+                  maxLength={600}
                   value={draft.heroDescription}
                   onChange={(e) =>
                     setDraft({...draft, heroDescription: e.target.value})
@@ -431,6 +557,7 @@ export function AdminPanelModal({
                     <input
                       type="url"
                       required
+                      maxLength={1000}
                       value={draft.videoUrl}
                       onChange={(e) =>
                         setDraft({...draft, videoUrl: e.target.value})
@@ -444,6 +571,7 @@ export function AdminPanelModal({
                     </label>
                     <input
                       type="text"
+                      maxLength={200}
                       value={draft.videoTitle}
                       onChange={(e) =>
                         setDraft({...draft, videoTitle: e.target.value})
@@ -466,6 +594,7 @@ export function AdminPanelModal({
                     >
                       <input
                         type="text"
+                        maxLength={120}
                         value={pillar.title}
                         onChange={(e) => {
                           const next = [...draft.heroPillars];
@@ -476,6 +605,7 @@ export function AdminPanelModal({
                       />
                       <textarea
                         rows={3}
+                        maxLength={400}
                         value={pillar.description}
                         onChange={(e) => {
                           const next = [...draft.heroPillars];
@@ -495,9 +625,10 @@ export function AdminPanelModal({
               <div className="flex justify-end">
                 <button
                   type="submit"
-                  className="rounded-lg bg-[#2563EB] px-5 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8]"
+                  disabled={saving || connectingGoogle}
+                  className="rounded-lg bg-[#2563EB] px-5 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8] disabled:opacity-60"
                 >
-                  Guardar cambios de portada
+                  {saving ? 'Publicando...' : 'Guardar y publicar portada'}
                 </button>
               </div>
             </form>
@@ -505,7 +636,6 @@ export function AdminPanelModal({
 
           {activeTab === 'gallery' && (
             <div className="space-y-8">
-              {/* Gallery Section Header Editor */}
               <form
                 onSubmit={handleSaveGeneral}
                 className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4"
@@ -516,14 +646,16 @@ export function AdminPanelModal({
                   </h3>
                   <button
                     type="submit"
-                    className="rounded-lg bg-[#07090E] px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#2563EB]"
+                    disabled={saving || connectingGoogle}
+                    className="rounded-lg bg-[#07090E] px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#2563EB] disabled:opacity-60"
                   >
-                    Guardar textos
+                    {saving ? 'Publicando...' : 'Publicar textos'}
                   </button>
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <input
                     type="text"
+                    maxLength={120}
                     value={draft.galleryKicker}
                     onChange={(e) =>
                       setDraft({...draft, galleryKicker: e.target.value})
@@ -533,6 +665,7 @@ export function AdminPanelModal({
                   />
                   <input
                     type="text"
+                    maxLength={200}
                     value={draft.galleryTitle}
                     onChange={(e) =>
                       setDraft({...draft, galleryTitle: e.target.value})
@@ -543,6 +676,7 @@ export function AdminPanelModal({
                 </div>
                 <textarea
                   rows={2}
+                  maxLength={600}
                   value={draft.galleryDescription}
                   onChange={(e) =>
                     setDraft({...draft, galleryDescription: e.target.value})
@@ -552,7 +686,6 @@ export function AdminPanelModal({
                 />
               </form>
 
-              {/* Add or Edit Image Form */}
               <form
                 onSubmit={handleSaveGalleryItem}
                 className="space-y-4 rounded-xl border border-slate-200 p-5"
@@ -582,6 +715,7 @@ export function AdminPanelModal({
                     <input
                       type="url"
                       required
+                      maxLength={1000}
                       value={imgUrl}
                       onChange={(e) => setImgUrl(e.target.value)}
                       placeholder="https://..."
@@ -595,6 +729,7 @@ export function AdminPanelModal({
                     <input
                       type="text"
                       required
+                      maxLength={160}
                       value={imgTitle}
                       onChange={(e) => setImgTitle(e.target.value)}
                       placeholder="Fachada minimalista en azul"
@@ -628,6 +763,7 @@ export function AdminPanelModal({
                     </label>
                     <input
                       type="text"
+                      maxLength={120}
                       value={imgLocation}
                       onChange={(e) => setImgLocation(e.target.value)}
                       placeholder="Madrid, España"
@@ -640,6 +776,7 @@ export function AdminPanelModal({
                     </label>
                     <input
                       type="text"
+                      maxLength={16}
                       value={imgYear}
                       onChange={(e) => setImgYear(e.target.value)}
                       placeholder="2026"
@@ -654,6 +791,7 @@ export function AdminPanelModal({
                   </label>
                   <input
                     type="text"
+                    maxLength={300}
                     value={imgAlt}
                     onChange={(e) => setImgAlt(e.target.value)}
                     placeholder="Descripción breve de lo que muestra la fotografía"
@@ -664,17 +802,21 @@ export function AdminPanelModal({
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#2563EB] px-5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8]"
+                    disabled={saving || connectingGoogle}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#2563EB] px-5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8] disabled:opacity-60"
                   >
                     <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                     <span>
-                      {selectedItemId ? 'Actualizar imagen' : 'Añadir imagen'}
+                      {saving
+                        ? 'Publicando...'
+                        : selectedItemId
+                          ? 'Actualizar y publicar'
+                          : 'Añadir y publicar'}
                     </span>
                   </button>
                 </div>
               </form>
 
-              {/* Existing Gallery Items List */}
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold text-[#07090E]">
                   Imágenes actuales ({draft.galleryItems.length})
@@ -705,8 +847,8 @@ export function AdminPanelModal({
                       <div className="flex shrink-0 items-center gap-1">
                         <button
                           type="button"
-                          onClick={() => handleMoveItem(idx, -1)}
-                          disabled={idx === 0}
+                          onClick={() => void handleMoveItem(idx, -1)}
+                          disabled={idx === 0 || saving}
                           aria-label="Subir posición"
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30"
                         >
@@ -714,8 +856,10 @@ export function AdminPanelModal({
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleMoveItem(idx, 1)}
-                          disabled={idx === draft.galleryItems.length - 1}
+                          onClick={() => void handleMoveItem(idx, 1)}
+                          disabled={
+                            idx === draft.galleryItems.length - 1 || saving
+                          }
                           aria-label="Bajar posición"
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30"
                         >
@@ -731,9 +875,10 @@ export function AdminPanelModal({
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDeleteItem(item.id)}
+                          onClick={() => void handleDeleteItem(item.id)}
+                          disabled={saving}
                           aria-label={`Eliminar ${item.title}`}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-600"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
                         >
                           <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </button>
@@ -747,7 +892,6 @@ export function AdminPanelModal({
 
           {activeTab === 'sections' && (
             <form onSubmit={handleSaveGeneral} className="space-y-6">
-              {/* Enfoque Section */}
               <div className="space-y-4 rounded-xl border border-slate-200 p-5">
                 <h3 className="text-sm font-semibold text-[#07090E]">
                   Sección Enfoque
@@ -755,6 +899,7 @@ export function AdminPanelModal({
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <input
                     type="text"
+                    maxLength={120}
                     value={draft.approachKicker}
                     onChange={(e) =>
                       setDraft({...draft, approachKicker: e.target.value})
@@ -764,6 +909,7 @@ export function AdminPanelModal({
                   />
                   <input
                     type="text"
+                    maxLength={200}
                     value={draft.approachTitle}
                     onChange={(e) =>
                       setDraft({...draft, approachTitle: e.target.value})
@@ -774,6 +920,7 @@ export function AdminPanelModal({
                 </div>
                 <textarea
                   rows={2}
+                  maxLength={600}
                   value={draft.approachDescription}
                   onChange={(e) =>
                     setDraft({...draft, approachDescription: e.target.value})
@@ -789,6 +936,7 @@ export function AdminPanelModal({
                     >
                       <input
                         type="text"
+                        maxLength={120}
                         value={item.title}
                         onChange={(e) => {
                           const next = [...draft.approachItems];
@@ -799,6 +947,7 @@ export function AdminPanelModal({
                       />
                       <textarea
                         rows={2}
+                        maxLength={400}
                         value={item.description}
                         onChange={(e) => {
                           const next = [...draft.approachItems];
@@ -812,7 +961,6 @@ export function AdminPanelModal({
                 </div>
               </div>
 
-              {/* Contacto & Footer */}
               <div className="space-y-4 rounded-xl border border-slate-200 p-5">
                 <h3 className="text-sm font-semibold text-[#07090E]">
                   Sección Contacto y Pie de página
@@ -820,6 +968,7 @@ export function AdminPanelModal({
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <input
                     type="text"
+                    maxLength={200}
                     value={draft.contactTitle}
                     onChange={(e) =>
                       setDraft({...draft, contactTitle: e.target.value})
@@ -829,6 +978,7 @@ export function AdminPanelModal({
                   />
                   <input
                     type="email"
+                    maxLength={160}
                     value={draft.contactEmail}
                     onChange={(e) =>
                       setDraft({...draft, contactEmail: e.target.value})
@@ -839,6 +989,7 @@ export function AdminPanelModal({
                 </div>
                 <textarea
                   rows={2}
+                  maxLength={600}
                   value={draft.contactDescription}
                   onChange={(e) =>
                     setDraft({...draft, contactDescription: e.target.value})
@@ -848,6 +999,7 @@ export function AdminPanelModal({
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <input
                     type="text"
+                    maxLength={160}
                     value={draft.contactLocation}
                     onChange={(e) =>
                       setDraft({...draft, contactLocation: e.target.value})
@@ -857,6 +1009,7 @@ export function AdminPanelModal({
                   />
                   <input
                     type="text"
+                    maxLength={300}
                     value={draft.footerTagline}
                     onChange={(e) =>
                       setDraft({...draft, footerTagline: e.target.value})
@@ -866,6 +1019,7 @@ export function AdminPanelModal({
                   />
                   <input
                     type="text"
+                    maxLength={120}
                     value={draft.footerCopyright}
                     onChange={(e) =>
                       setDraft({...draft, footerCopyright: e.target.value})
@@ -879,9 +1033,10 @@ export function AdminPanelModal({
               <div className="flex justify-end">
                 <button
                   type="submit"
-                  className="rounded-lg bg-[#2563EB] px-5 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8]"
+                  disabled={saving || connectingGoogle}
+                  className="rounded-lg bg-[#2563EB] px-5 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8] disabled:opacity-60"
                 >
-                  Guardar secciones
+                  {saving ? 'Publicando...' : 'Guardar y publicar secciones'}
                 </button>
               </div>
             </form>

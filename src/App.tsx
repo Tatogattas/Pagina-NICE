@@ -1,3 +1,4 @@
+import {onAuthStateChanged, signInWithPopup, signOut, type User} from 'firebase/auth';
 import {
   ArrowDown,
   CheckCircle2,
@@ -21,28 +22,22 @@ import {
   DEFAULT_SITE_CONFIG,
   type SiteContentConfig,
 } from './data/siteConfig';
+import {auth, googleProvider} from './firebase';
+import {
+  publishSiteContent,
+  subscribeToSiteContent,
+} from './services/siteContentService';
 
-const STORAGE_KEYS = {
-  siteConfig: 'monolito_site_config_v1',
-  adminUser: 'monolito_admin_session_v1',
-};
+const ADMIN_SESSION_KEY = 'monolito_admin_session_v1';
 
 export default function App() {
-  const [siteConfig, setSiteConfig] = useState<SiteContentConfig>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.siteConfig);
-      if (saved) {
-        return {...DEFAULT_SITE_CONFIG, ...(JSON.parse(saved) as Partial<SiteContentConfig>)};
-      }
-    } catch {
-      // Fallback to default
-    }
-    return DEFAULT_SITE_CONFIG;
-  });
+  const [siteConfig, setSiteConfig] =
+    useState<SiteContentConfig>(DEFAULT_SITE_CONFIG);
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
 
   const [adminUser, setAdminUser] = useState<string | null>(() => {
     try {
-      const savedUser = localStorage.getItem(STORAGE_KEYS.adminUser);
+      const savedUser = localStorage.getItem(ADMIN_SESSION_KEY);
       return savedUser === 'tatogattas' ? savedUser : null;
     } catch {
       return null;
@@ -71,20 +66,28 @@ export default function App() {
   const [contactError, setContactError] = useState<string | null>(null);
   const [contactSubmitted, setContactSubmitted] = useState(false);
 
+  // Real-time subscription to global published site content in Firestore
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.siteConfig, JSON.stringify(siteConfig));
-    } catch {
-      // Ignore storage quota errors
-    }
-  }, [siteConfig]);
+    const unsubscribe = subscribeToSiteContent((remoteConfig) => {
+      setSiteConfig(remoteConfig);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Track Firebase Auth user for cloud publishing
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     try {
       if (adminUser) {
-        localStorage.setItem(STORAGE_KEYS.adminUser, adminUser);
+        localStorage.setItem(ADMIN_SESSION_KEY, adminUser);
       } else {
-        localStorage.removeItem(STORAGE_KEYS.adminUser);
+        localStorage.removeItem(ADMIN_SESSION_KEY);
       }
     } catch {
       // Ignore storage errors
@@ -114,26 +117,43 @@ export default function App() {
     setIsAdminPanelOpen(true);
   };
 
-  const handleSelectVideoPreset = (preset: VideoSourcePreset) => {
+  const handlePublishConfig = async (nextConfig: SiteContentConfig) => {
+    const published = await publishSiteContent(nextConfig);
+    setSiteConfig(published);
+  };
+
+  const handleSelectVideoPreset = async (preset: VideoSourcePreset) => {
     if (!isAdmin) return;
-    setSiteConfig((prev) => ({
-      ...prev,
+    if (!auth.currentUser) {
+      try {
+        await signInWithPopup(auth, googleProvider);
+      } catch {
+        openAdminEditor('hero');
+        return;
+      }
+    }
+    await handlePublishConfig({
+      ...siteConfig,
       videoUrl: preset.url,
       videoTitle: preset.title,
-    }));
+    });
   };
 
-  const handleRemoveGalleryItem = (id: string) => {
+  const handleRemoveGalleryItem = async (id: string) => {
     if (!isAdmin) return;
-    setSiteConfig((prev) => ({
-      ...prev,
-      galleryItems: prev.galleryItems.filter((item) => item.id !== id),
-    }));
+    if (!auth.currentUser) {
+      openAdminEditor('gallery');
+      return;
+    }
+    await handlePublishConfig({
+      ...siteConfig,
+      galleryItems: siteConfig.galleryItems.filter((item) => item.id !== id),
+    });
   };
 
-  const handleResetConfig = () => {
+  const handleResetConfig = async () => {
     if (!isAdmin) return;
-    setSiteConfig(DEFAULT_SITE_CONFIG);
+    await handlePublishConfig(DEFAULT_SITE_CONFIG);
     setActiveCategory('Todas');
   };
 
@@ -147,6 +167,7 @@ export default function App() {
   const handleLogout = () => {
     setAdminUser(null);
     setIsAdminPanelOpen(false);
+    void signOut(auth);
   };
 
   const handleOpenLightbox = (item: GalleryItem) => {
@@ -259,7 +280,12 @@ export default function App() {
               <span aria-hidden="true" className="text-slate-500">
                 ·
               </span>
-              <span className="text-slate-300">Sesión de {adminUser}</span>
+              <span className="text-slate-300">
+                {adminUser}{' '}
+                {firebaseUser
+                  ? '(Publicación global activa)'
+                  : '(Conecta Google para publicar)'}
+              </span>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -358,7 +384,7 @@ export default function App() {
                   videoUrl={siteConfig.videoUrl}
                   videoTitle={siteConfig.videoTitle}
                   isAdmin={isAdmin}
-                  onSelectPreset={handleSelectVideoPreset}
+                  onSelectPreset={(p) => void handleSelectVideoPreset(p)}
                   onOpenAdminVideoEditor={() => openAdminEditor('hero')}
                 />
               </div>
@@ -390,7 +416,7 @@ export default function App() {
           onCategoryChange={setActiveCategory}
           onSelectImage={handleOpenLightbox}
           onEditItem={(item) => openAdminEditor('gallery', item.id)}
-          onRemoveItem={handleRemoveGalleryItem}
+          onRemoveItem={(id) => void handleRemoveGalleryItem(id)}
           onOpenAddImage={() => openAdminEditor('gallery', null)}
         />
 
@@ -655,7 +681,7 @@ export default function App() {
         onSuccess={handleLoginSuccess}
       />
 
-      {/* Admin Full Site Editor Modal (only mounted/accessible when authenticated) */}
+      {/* Admin Full Site Editor Modal */}
       {isAdmin && adminUser && (
         <AdminPanelModal
           isOpen={isAdminPanelOpen}
@@ -663,11 +689,12 @@ export default function App() {
           editingGalleryItemId={editingGalleryId}
           config={siteConfig}
           adminUser={adminUser}
+          firebaseUser={firebaseUser}
           onClose={() => {
             setIsAdminPanelOpen(false);
             setEditingGalleryId(null);
           }}
-          onUpdateConfig={setSiteConfig}
+          onPublishConfig={handlePublishConfig}
           onResetConfig={handleResetConfig}
           onLogout={handleLogout}
         />
