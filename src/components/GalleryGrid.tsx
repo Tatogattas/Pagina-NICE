@@ -1,4 +1,10 @@
-import {ArrowUpRight, Image as ImageIcon, Plus, Trash2} from 'lucide-react';
+import {
+  ArrowUpRight,
+  Image as ImageIcon,
+  Pencil,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import {useState} from 'react';
 import type {GalleryCategory, GalleryItem} from '../data/externalMedia';
 import {extractDomainLabel} from '../data/externalMedia';
@@ -11,25 +17,34 @@ const CATEGORIES: GalleryCategory[] = [
 ];
 
 interface GalleryGridProps {
+  kicker: string;
+  title: string;
+  description: string;
   items: GalleryItem[];
+  isAdmin: boolean;
   activeCategory: GalleryCategory;
   onCategoryChange: (category: GalleryCategory) => void;
   onSelectImage: (item: GalleryItem) => void;
-  onRemoveCustomItem: (id: string) => void;
-  onOpenLinkManager: () => void;
+  onEditItem: (item: GalleryItem) => void;
+  onRemoveItem: (id: string) => void;
+  onOpenAddImage: () => void;
 }
 
 interface GalleryCardProps {
   item: GalleryItem;
   isFeatured: boolean;
+  isAdmin: boolean;
   onSelect: () => void;
-  onRemove?: () => void;
+  onEdit: () => void;
+  onRemove: () => void;
 }
 
 function GalleryCard({
   item,
   isFeatured,
+  isAdmin,
   onSelect,
+  onEdit,
   onRemove,
 }: GalleryCardProps) {
   const [loaded, setLoaded] = useState(false);
@@ -78,7 +93,6 @@ function GalleryCard({
           </div>
         )}
 
-        {/* Measured scrim for crisp legible affordance on hover/focus */}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100" />
 
         <div className="pointer-events-none absolute right-4 bottom-4 flex h-9 w-9 items-center justify-center rounded-lg bg-[#2563EB] text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
@@ -101,15 +115,25 @@ function GalleryCard({
           </div>
         </div>
 
-        {onRemove && (
-          <button
-            type="button"
-            onClick={onRemove}
-            aria-label={`Quitar enlace ${item.title}`}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-[#07090E] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]"
-          >
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-          </button>
+        {isAdmin && (
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={onEdit}
+              aria-label={`Editar ${item.title}`}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-[#2563EB] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]"
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={onRemove}
+              aria-label={`Eliminar ${item.title}`}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         )}
       </div>
     </article>
@@ -117,12 +141,17 @@ function GalleryCard({
 }
 
 export function GalleryGrid({
+  kicker,
+  title,
+  description,
   items,
+  isAdmin,
   activeCategory,
   onCategoryChange,
   onSelectImage,
-  onRemoveCustomItem,
-  onOpenLinkManager,
+  onEditItem,
+  onRemoveItem,
+  onOpenAddImage,
 }: GalleryGridProps) {
   const filteredItems =
     activeCategory === 'Todas'
@@ -135,23 +164,18 @@ export function GalleryGrid({
       aria-labelledby="galeria-heading"
       className="mx-auto max-w-7xl px-6 py-20 lg:px-10 lg:py-28"
     >
-      {/* Header + Filter Controls */}
       <div className="flex flex-col justify-between gap-8 border-b border-slate-200 pb-8 md:flex-row md:items-end">
         <div className="max-w-xl">
-          <p className="text-xs font-medium text-[#2563EB]">
-            Colección externa
-          </p>
+          <p className="text-xs font-medium text-[#2563EB]">{kicker}</p>
           <h2
             id="galeria-heading"
             className="mt-2 text-3xl font-semibold tracking-tight text-[#07090E] sm:text-4xl"
             style={{textWrap: 'balance'}}
           >
-            Galería visual mediante enlaces remotos
+            {title}
           </h2>
           <p className="mt-3 text-base leading-relaxed text-slate-600">
-            Cada fotografía se carga directamente desde su origen externo en la
-            red. Haz clic en cualquier obra para abrir el visor a pantalla
-            completa.
+            {description}
           </p>
         </div>
 
@@ -182,18 +206,19 @@ export function GalleryGrid({
             })}
           </div>
 
-          <button
-            type="button"
-            onClick={onOpenLinkManager}
-            className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-[#07090E] transition-colors hover:border-[#2563EB] hover:text-[#2563EB] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]"
-          >
-            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Añadir imagen</span>
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={onOpenAddImage}
+              className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-[#07090E] transition-colors hover:border-[#2563EB] hover:text-[#2563EB] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]"
+            >
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Añadir imagen</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Responsive Asymmetric Grid */}
       {filteredItems.length === 0 ? (
         <div className="mt-12 rounded-xl border border-slate-200 bg-slate-50 px-6 py-16 text-center">
           <p className="text-base font-medium text-[#07090E]">
@@ -220,10 +245,10 @@ export function GalleryGrid({
                 key={item.id}
                 item={item}
                 isFeatured={isFeatured}
+                isAdmin={isAdmin}
                 onSelect={() => onSelectImage(item)}
-                onRemove={
-                  item.isCustom ? () => onRemoveCustomItem(item.id) : undefined
-                }
+                onEdit={() => onEditItem(item)}
+                onRemove={() => onRemoveItem(item.id)}
               />
             );
           })}

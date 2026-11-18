@@ -9,15 +9,17 @@ import {
 interface ExternalVideoPlayerProps {
   videoUrl: string;
   videoTitle: string;
+  isAdmin: boolean;
   onSelectPreset: (preset: VideoSourcePreset) => void;
-  onOpenLinkManager: () => void;
+  onOpenAdminVideoEditor: () => void;
 }
 
 export function ExternalVideoPlayer({
   videoUrl,
   videoTitle,
+  isAdmin,
   onSelectPreset,
-  onOpenLinkManager,
+  onOpenAdminVideoEditor,
 }: ExternalVideoPlayerProps) {
   const [videoError, setVideoError] = useState(false);
 
@@ -55,20 +57,22 @@ export function ExternalVideoPlayer({
           <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-[#0B111D] px-6 text-center">
             <Film className="h-8 w-8 text-[#3B82F6]" aria-hidden="true" />
             <p className="text-sm font-medium text-white">
-              No se pudo cargar el video desde el enlace proporcionado.
+              Video temporalmente no disponible desde el enlace externo.
             </p>
-            <button
-              type="button"
-              onClick={onOpenLinkManager}
-              className="rounded-lg bg-[#2563EB] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B82F6]"
-            >
-              Actualizar enlace externo
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={onOpenAdminVideoEditor}
+                className="rounded-lg bg-[#2563EB] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B82F6]"
+              >
+                Actualizar enlace externo
+              </button>
+            )}
           </div>
         )}
       </div>
 
-      {/* Unboxed external origin bar + quick external source selector */}
+      {/* Unboxed external origin bar */}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-4 text-xs text-slate-300">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium text-white">{videoTitle}</span>
@@ -97,31 +101,35 @@ export function ExternalVideoPlayer({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {DEFAULT_VIDEO_PRESETS.map((preset, idx) => {
-            const isActive = preset.url === videoUrl;
-            return (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => onSelectPreset(preset)}
-                className={`whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B82F6] ${
-                  isActive
-                    ? 'bg-[#2563EB] text-white'
-                    : 'bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white'
-                }`}
-              >
-                0{idx + 1}. {preset.duration}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            onClick={onOpenLinkManager}
-            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-white/15 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:border-[#3B82F6] hover:text-[#60A5FA] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B82F6]"
-          >
-            <Link2 className="h-3 w-3" aria-hidden="true" />
-            <span>Cambiar enlace</span>
-          </button>
+          {isAdmin &&
+            DEFAULT_VIDEO_PRESETS.map((preset, idx) => {
+              const isActive = preset.url === videoUrl;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => onSelectPreset(preset)}
+                  className={`whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B82F6] ${
+                    isActive
+                      ? 'bg-[#2563EB] text-white'
+                      : 'bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white'
+                  }`}
+                >
+                  0{idx + 1}. {preset.duration}
+                </button>
+              );
+            })}
+
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={onOpenAdminVideoEditor}
+              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-white/15 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:border-[#3B82F6] hover:text-[#60A5FA] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B82F6]"
+            >
+              <Link2 className="h-3 w-3" aria-hidden="true" />
+              <span>Cambiar enlace</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

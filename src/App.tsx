@@ -1,59 +1,67 @@
-import {ArrowDown, CheckCircle2, Link2} from 'lucide-react';
+import {
+  ArrowDown,
+  CheckCircle2,
+  Lock,
+  LogOut,
+  Pencil,
+  SlidersHorizontal,
+} from 'lucide-react';
 import {useEffect, useMemo, useState, type FormEvent} from 'react';
-import {ExternalLinkModal} from './components/ExternalLinkModal';
+import {AdminLoginModal} from './components/AdminLoginModal';
+import {AdminPanelModal} from './components/AdminPanelModal';
 import {ExternalVideoPlayer} from './components/ExternalVideoPlayer';
 import {GalleryGrid} from './components/GalleryGrid';
 import {LightboxModal} from './components/LightboxModal';
 import {
-  DEFAULT_GALLERY_ITEMS,
-  DEFAULT_VIDEO_PRESETS,
   type GalleryCategory,
   type GalleryItem,
   type VideoSourcePreset,
 } from './data/externalMedia';
+import {
+  DEFAULT_SITE_CONFIG,
+  type SiteContentConfig,
+} from './data/siteConfig';
 
 const STORAGE_KEYS = {
-  videoUrl: 'monolito_external_video_url',
-  videoTitle: 'monolito_external_video_title',
-  customGallery: 'monolito_custom_gallery_items',
+  siteConfig: 'monolito_site_config_v1',
+  adminUser: 'monolito_admin_session_v1',
 };
 
 export default function App() {
-  const [videoUrl, setVideoUrl] = useState<string>(() => {
+  const [siteConfig, setSiteConfig] = useState<SiteContentConfig>(() => {
     try {
-      return (
-        localStorage.getItem(STORAGE_KEYS.videoUrl) ||
-        DEFAULT_VIDEO_PRESETS[0].url
-      );
+      const saved = localStorage.getItem(STORAGE_KEYS.siteConfig);
+      if (saved) {
+        return {...DEFAULT_SITE_CONFIG, ...(JSON.parse(saved) as Partial<SiteContentConfig>)};
+      }
     } catch {
-      return DEFAULT_VIDEO_PRESETS[0].url;
+      // Fallback to default
+    }
+    return DEFAULT_SITE_CONFIG;
+  });
+
+  const [adminUser, setAdminUser] = useState<string | null>(() => {
+    try {
+      const savedUser = localStorage.getItem(STORAGE_KEYS.adminUser);
+      return savedUser === 'tatogattas' ? savedUser : null;
+    } catch {
+      return null;
     }
   });
 
-  const [videoTitle, setVideoTitle] = useState<string>(() => {
-    try {
-      return (
-        localStorage.getItem(STORAGE_KEYS.videoTitle) ||
-        DEFAULT_VIDEO_PRESETS[0].title
-      );
-    } catch {
-      return DEFAULT_VIDEO_PRESETS[0].title;
-    }
-  });
-
-  const [customItems, setCustomItems] = useState<GalleryItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.customGallery);
-      return saved ? (JSON.parse(saved) as GalleryItem[]) : [];
-    } catch {
-      return [];
-    }
-  });
+  const isAdmin = adminUser === 'tatogattas';
 
   const [activeCategory, setActiveCategory] =
     useState<GalleryCategory>('Todas');
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+
+  // Admin panel modal state
+  const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+  const [adminPanelTab, setAdminPanelTab] = useState<
+    'hero' | 'gallery' | 'sections'
+  >('hero');
+  const [editingGalleryId, setEditingGalleryId] = useState<string | null>(null);
 
   // Contact form state
   const [contactName, setContactName] = useState('');
@@ -65,61 +73,80 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.videoUrl, videoUrl);
-      localStorage.setItem(STORAGE_KEYS.videoTitle, videoTitle);
+      localStorage.setItem(STORAGE_KEYS.siteConfig, JSON.stringify(siteConfig));
     } catch {
       // Ignore storage quota errors
     }
-  }, [videoUrl, videoTitle]);
+  }, [siteConfig]);
 
   useEffect(() => {
     try {
-      localStorage.setItem(
-        STORAGE_KEYS.customGallery,
-        JSON.stringify(customItems)
-      );
+      if (adminUser) {
+        localStorage.setItem(STORAGE_KEYS.adminUser, adminUser);
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.adminUser);
+      }
     } catch {
-      // Ignore storage quota errors
+      // Ignore storage errors
     }
-  }, [customItems]);
-
-  const allGalleryItems = useMemo(
-    () => [...customItems, ...DEFAULT_GALLERY_ITEMS],
-    [customItems]
-  );
+  }, [adminUser]);
 
   const visibleGalleryItems = useMemo(
     () =>
       activeCategory === 'Todas'
-        ? allGalleryItems
-        : allGalleryItems.filter((item) => item.category === activeCategory),
-    [allGalleryItems, activeCategory]
+        ? siteConfig.galleryItems
+        : siteConfig.galleryItems.filter(
+            (item) => item.category === activeCategory
+          ),
+    [siteConfig.galleryItems, activeCategory]
   );
 
+  const openAdminEditor = (
+    tab: 'hero' | 'gallery' | 'sections',
+    itemId: string | null = null
+  ) => {
+    if (!isAdmin) {
+      setIsLoginModalOpen(true);
+      return;
+    }
+    setAdminPanelTab(tab);
+    setEditingGalleryId(itemId);
+    setIsAdminPanelOpen(true);
+  };
+
   const handleSelectVideoPreset = (preset: VideoSourcePreset) => {
-    setVideoUrl(preset.url);
-    setVideoTitle(preset.title);
+    if (!isAdmin) return;
+    setSiteConfig((prev) => ({
+      ...prev,
+      videoUrl: preset.url,
+      videoTitle: preset.title,
+    }));
   };
 
-  const handleSaveVideo = (url: string, title: string) => {
-    setVideoUrl(url);
-    setVideoTitle(title);
+  const handleRemoveGalleryItem = (id: string) => {
+    if (!isAdmin) return;
+    setSiteConfig((prev) => ({
+      ...prev,
+      galleryItems: prev.galleryItems.filter((item) => item.id !== id),
+    }));
   };
 
-  const handleAddGalleryItem = (item: GalleryItem) => {
-    setCustomItems((prev) => [item, ...prev]);
+  const handleResetConfig = () => {
+    if (!isAdmin) return;
+    setSiteConfig(DEFAULT_SITE_CONFIG);
     setActiveCategory('Todas');
   };
 
-  const handleRemoveCustomItem = (id: string) => {
-    setCustomItems((prev) => prev.filter((item) => item.id !== id));
+  const handleLoginSuccess = (username: string) => {
+    setAdminUser(username);
+    setAdminPanelTab('hero');
+    setEditingGalleryId(null);
+    setIsAdminPanelOpen(true);
   };
 
-  const handleResetAll = () => {
-    setVideoUrl(DEFAULT_VIDEO_PRESETS[0].url);
-    setVideoTitle(DEFAULT_VIDEO_PRESETS[0].title);
-    setCustomItems([]);
-    setActiveCategory('Todas');
+  const handleLogout = () => {
+    setAdminUser(null);
+    setIsAdminPanelOpen(false);
   };
 
   const handleOpenLightbox = (item: GalleryItem) => {
@@ -162,7 +189,7 @@ export default function App() {
             href="#video"
             className="font-display text-lg font-semibold tracking-tight text-white whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B82F6]"
           >
-            Monolito
+            {siteConfig.brandName}
           </a>
 
           {/* Zone 2: 4 Concise Single-Line Links */}
@@ -198,17 +225,80 @@ export default function App() {
 
           {/* Zone 3: Single Primary Action */}
           <div className="flex items-center shrink-0">
-            <button
-              type="button"
-              onClick={() => setIsLinkModalOpen(true)}
-              className="inline-flex items-center gap-2 whitespace-nowrap shrink-0 rounded-lg bg-[#2563EB] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B82F6]"
-            >
-              <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Configurar enlaces</span>
-            </button>
+            {isAdmin ? (
+              <button
+                type="button"
+                onClick={() => openAdminEditor('hero')}
+                className="inline-flex items-center gap-2 whitespace-nowrap shrink-0 rounded-lg bg-[#2563EB] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B82F6]"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Editar sitio</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsLoginModalOpen(true)}
+                className="inline-flex items-center gap-2 whitespace-nowrap shrink-0 rounded-lg border border-white/20 px-4 py-2 text-xs font-semibold text-white transition-colors hover:border-[#3B82F6] hover:bg-[#2563EB] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B82F6]"
+              >
+                <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Acceso admin</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
+
+      {/* Admin Active Toolbar (visible strictly when logged in as tatogattas) */}
+      {isAdmin && (
+        <div className="border-b border-[#2563EB]/30 bg-[#0D1526] text-white">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-2.5 text-xs lg:px-10">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-[#60A5FA]">
+                Modo administrador
+              </span>
+              <span aria-hidden="true" className="text-slate-500">
+                ·
+              </span>
+              <span className="text-slate-300">Sesión de {adminUser}</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => openAdminEditor('hero')}
+                className="inline-flex items-center gap-1 font-medium text-white transition-colors hover:text-[#60A5FA]"
+              >
+                <Pencil className="h-3 w-3" aria-hidden="true" />
+                <span>Portada y video</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openAdminEditor('gallery')}
+                className="inline-flex items-center gap-1 font-medium text-white transition-colors hover:text-[#60A5FA]"
+              >
+                <Pencil className="h-3 w-3" aria-hidden="true" />
+                <span>Imágenes</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openAdminEditor('sections')}
+                className="inline-flex items-center gap-1 font-medium text-white transition-colors hover:text-[#60A5FA]"
+              >
+                <Pencil className="h-3 w-3" aria-hidden="true" />
+                <span>Textos y contacto</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="inline-flex items-center gap-1 rounded-md bg-white/10 px-2.5 py-1 font-medium text-white transition-colors hover:bg-red-600"
+              >
+                <LogOut className="h-3 w-3" aria-hidden="true" />
+                <span>Salir</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main>
         {/* Hero Section: Deep Obsidian Black + Embedded External Video */}
@@ -219,11 +309,10 @@ export default function App() {
         >
           <div className="mx-auto max-w-7xl px-6 pt-12 pb-16 lg:px-10 lg:pt-20 lg:pb-24">
             <div className="grid grid-cols-1 items-stretch gap-10 lg:grid-cols-12 lg:gap-12">
-              {/* Left Column: Minimalist Typography & Primary CTA */}
               <div className="flex flex-col justify-between lg:col-span-5">
                 <div>
                   <p className="text-xs font-medium tracking-wide text-[#60A5FA]">
-                    Arquitectura · Luz · Movimiento
+                    {siteConfig.heroKicker}
                   </p>
 
                   <h1
@@ -235,14 +324,11 @@ export default function App() {
                       textWrap: 'balance',
                     }}
                   >
-                    Formas puras en azul, negro y blanco.
+                    {siteConfig.heroTitle}
                   </h1>
 
                   <p className="mt-6 max-w-md text-base leading-relaxed text-slate-300">
-                    Un escaparate visual minimalista construido bajo una premisa
-                    técnica estricta: tanto el video principal como la galería
-                    fotográfica se enlazan desde servidores externos sin alojar
-                    archivos en el servidor propio.
+                    {siteConfig.heroDescription}
                   </p>
                 </div>
 
@@ -251,72 +337,61 @@ export default function App() {
                     href="#galeria"
                     className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg bg-[#2563EB] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B82F6]"
                   >
-                    <span>Explorar galería</span>
+                    <span>{siteConfig.heroCtaLabel}</span>
                     <ArrowDown className="h-4 w-4" aria-hidden="true" />
                   </a>
 
-                  <button
-                    type="button"
-                    onClick={() => setIsLinkModalOpen(true)}
-                    className="whitespace-nowrap rounded-lg border border-white/15 px-5 py-3 text-sm font-medium text-white transition-colors hover:border-[#3B82F6] hover:text-[#60A5FA] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B82F6]"
-                  >
-                    Cambiar video externo
-                  </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => openAdminEditor('hero')}
+                      className="whitespace-nowrap rounded-lg border border-white/15 px-5 py-3 text-sm font-medium text-white transition-colors hover:border-[#3B82F6] hover:text-[#60A5FA] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B82F6]"
+                    >
+                      Editar portada y video
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Right Column: Dominant 16:9 Embedded External Video */}
               <div className="lg:col-span-7">
                 <ExternalVideoPlayer
-                  videoUrl={videoUrl}
-                  videoTitle={videoTitle}
+                  videoUrl={siteConfig.videoUrl}
+                  videoTitle={siteConfig.videoTitle}
+                  isAdmin={isAdmin}
                   onSelectPreset={handleSelectVideoPreset}
-                  onOpenLinkManager={() => setIsLinkModalOpen(true)}
+                  onOpenAdminVideoEditor={() => openAdminEditor('hero')}
                 />
               </div>
             </div>
 
-            {/* Full-Width 3-Column Strip Below Hero Split */}
             <div className="mt-14 grid grid-cols-1 gap-8 border-t border-white/10 pt-8 md:grid-cols-3">
-              <div>
-                <h2 className="text-sm font-semibold text-white">
-                  01. Video incrustado por URL
-                </h2>
-                <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
-                  Compatible con enlaces externos de YouTube, Vimeo o flujos
-                  directos en formato MP4 y WebM.
-                </p>
-              </div>
-              <div>
-                <h2 className="text-sm font-semibold text-white">
-                  02. Rejilla de enlaces remotos
-                </h2>
-                <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
-                  Fotografía curada en alta resolución servida mediante URLs
-                  externas con respaldo visual seguro.
-                </p>
-              </div>
-              <div>
-                <h2 className="text-sm font-semibold text-white">
-                  03. Cero archivos alojados
-                </h2>
-                <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
-                  Ningún recurso de imagen o video reside en el servidor de la
-                  aplicación, manteniendo el despliegue ligero.
-                </p>
-              </div>
+              {siteConfig.heroPillars.map((pillar) => (
+                <div key={pillar.id}>
+                  <h2 className="text-sm font-semibold text-white">
+                    {pillar.title}
+                  </h2>
+                  <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
+                    {pillar.description}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
         {/* Gallery Section: Crisp White Canvas */}
         <GalleryGrid
-          items={allGalleryItems}
+          kicker={siteConfig.galleryKicker}
+          title={siteConfig.galleryTitle}
+          description={siteConfig.galleryDescription}
+          items={siteConfig.galleryItems}
+          isAdmin={isAdmin}
           activeCategory={activeCategory}
           onCategoryChange={setActiveCategory}
           onSelectImage={handleOpenLightbox}
-          onRemoveCustomItem={handleRemoveCustomItem}
-          onOpenLinkManager={() => setIsLinkModalOpen(true)}
+          onEditItem={(item) => openAdminEditor('gallery', item.id)}
+          onRemoveItem={handleRemoveGalleryItem}
+          onOpenAddImage={() => openAdminEditor('gallery', null)}
         />
 
         {/* Editorial Principles Section */}
@@ -329,54 +404,40 @@ export default function App() {
             <div className="grid grid-cols-1 gap-12 lg:grid-cols-12">
               <div className="lg:col-span-5">
                 <p className="text-xs font-medium text-[#2563EB]">
-                  Principios de diseño
+                  {siteConfig.approachKicker}
                 </p>
                 <h2
                   id="enfoque-heading"
                   className="mt-2 text-3xl font-semibold tracking-tight text-[#07090E]"
                   style={{textWrap: 'balance'}}
                 >
-                  Restricción cromática y arquitectura ligera
+                  {siteConfig.approachTitle}
                 </h2>
                 <p className="mt-4 text-base leading-relaxed text-slate-600">
-                  Reducir la interfaz a tres tonos esenciales —blanco puro,
-                  negro obsidiana y azul cobalto— dirige toda la atención hacia
-                  el movimiento del video y la composición fotográfica.
+                  {siteConfig.approachDescription}
                 </p>
               </div>
 
               <div className="divide-y divide-slate-200 lg:col-span-7">
-                <div className="pb-6">
-                  <h3 className="text-base font-semibold text-[#07090E]">
-                    01. Independencia del servidor
-                  </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                    Todos los medios se referencian únicamente mediante URLs
-                    externas verificadas. Puedes sustituir el video principal o
-                    incorporar nuevas fotografías desde el gestor de enlaces en
-                    cualquier momento.
-                  </p>
-                </div>
-                <div className="py-6">
-                  <h3 className="text-base font-semibold text-[#07090E]">
-                    02. Jerarquía tipográfica y aire
-                  </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                    Cada bloque alterna fondos contrastados y divisores finos en
-                    lugar de tarjetas sobrecargadas, priorizando la lectura clara
-                    y la proporción visual.
-                  </p>
-                </div>
-                <div className="pt-6">
-                  <h3 className="text-base font-semibold text-[#07090E]">
-                    03. Visor integrado y accesibilidad
-                  </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                    Navegación completa por teclado en la galería ampliada,
-                    contraste verificado y compatibilidad automática con
-                    preferencias de movimiento reducido.
-                  </p>
-                </div>
+                {siteConfig.approachItems.map((item, idx) => (
+                  <div
+                    key={item.id}
+                    className={
+                      idx === 0
+                        ? 'pb-6'
+                        : idx === siteConfig.approachItems.length - 1
+                          ? 'pt-6'
+                          : 'py-6'
+                    }
+                  >
+                    <h3 className="text-base font-semibold text-[#07090E]">
+                      {item.title}
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                      {item.description}
+                    </p>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -390,26 +451,27 @@ export default function App() {
         >
           <div className="grid grid-cols-1 gap-12 lg:grid-cols-12">
             <div className="lg:col-span-5">
-              <p className="text-xs font-medium text-[#2563EB]">Contacto</p>
+              <p className="text-xs font-medium text-[#2563EB]">
+                {siteConfig.contactKicker}
+              </p>
               <h2
                 id="contacto-heading"
                 className="mt-2 text-3xl font-semibold tracking-tight text-[#07090E]"
                 style={{textWrap: 'balance'}}
               >
-                Comparte una obra o solicita una colaboración
+                {siteConfig.contactTitle}
               </h2>
               <p className="mt-4 text-base leading-relaxed text-slate-600">
-                Envíanos un enlace externo a tu pieza audiovisual o serie
-                fotográfica para incluirla en futuras ediciones de la galería.
+                {siteConfig.contactDescription}
               </p>
               <div className="mt-8 space-y-2 border-t border-slate-200 pt-6 text-sm text-slate-600">
                 <p>
                   <span className="font-medium text-[#07090E]">Estudio:</span>{' '}
-                  estudio@monolito.example
+                  {siteConfig.contactEmail}
                 </p>
                 <p>
                   <span className="font-medium text-[#07090E]">Ubicación:</span>{' '}
-                  Madrid · Valencia
+                  {siteConfig.contactLocation}
                 </p>
               </div>
             </div>
@@ -548,14 +610,13 @@ export default function App() {
         <div className="mx-auto flex max-w-7xl flex-col justify-between gap-6 px-6 py-10 sm:flex-row sm:items-center lg:px-10">
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <span className="font-display font-semibold tracking-tight text-white">
-              Monolito
+              {siteConfig.brandName}
             </span>
             <span aria-hidden="true" className="text-slate-600">
               ·
             </span>
             <span className="text-xs text-slate-400">
-              Contenido multimedia servido exclusivamente mediante enlaces
-              externos.
+              {siteConfig.footerTagline}
             </span>
           </div>
 
@@ -572,12 +633,14 @@ export default function App() {
             <a href="#contacto" className="transition-colors hover:text-white">
               Contacto
             </a>
-            <span className="text-slate-500">© 2026 Monolito</span>
+            <span className="text-slate-500">
+              {siteConfig.footerCopyright}
+            </span>
           </div>
         </div>
       </footer>
 
-      {/* Lightbox Viewer */}
+      {/* Lightbox Viewer (available to all visitors) */}
       <LightboxModal
         items={visibleGalleryItems}
         activeIndex={lightboxIndex}
@@ -585,16 +648,30 @@ export default function App() {
         onNavigate={(nextIdx) => setLightboxIndex(nextIdx)}
       />
 
-      {/* External Link Manager Modal */}
-      <ExternalLinkModal
-        isOpen={isLinkModalOpen}
-        currentVideoUrl={videoUrl}
-        currentVideoTitle={videoTitle}
-        onClose={() => setIsLinkModalOpen(false)}
-        onSaveVideo={handleSaveVideo}
-        onAddGalleryItem={handleAddGalleryItem}
-        onResetAll={handleResetAll}
+      {/* Admin Login Modal */}
+      <AdminLoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        onSuccess={handleLoginSuccess}
       />
+
+      {/* Admin Full Site Editor Modal (only mounted/accessible when authenticated) */}
+      {isAdmin && adminUser && (
+        <AdminPanelModal
+          isOpen={isAdminPanelOpen}
+          initialTab={adminPanelTab}
+          editingGalleryItemId={editingGalleryId}
+          config={siteConfig}
+          adminUser={adminUser}
+          onClose={() => {
+            setIsAdminPanelOpen(false);
+            setEditingGalleryId(null);
+          }}
+          onUpdateConfig={setSiteConfig}
+          onResetConfig={handleResetConfig}
+          onLogout={handleLogout}
+        />
+      )}
     </div>
   );
 }

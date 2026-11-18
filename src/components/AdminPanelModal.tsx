@@ -1,0 +1,893 @@
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  Download,
+  LogOut,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Trash2,
+  X,
+} from 'lucide-react';
+import {useEffect, useState, type FormEvent} from 'react';
+import {
+  isValidHttpsUrl,
+  parseExternalVideoUrl,
+  type GalleryCategory,
+  type GalleryItem,
+} from '../data/externalMedia';
+import type {SiteContentConfig} from '../data/siteConfig';
+
+type EditorTab = 'hero' | 'gallery' | 'sections';
+
+interface AdminPanelModalProps {
+  isOpen: boolean;
+  initialTab?: EditorTab;
+  editingGalleryItemId?: string | null;
+  config: SiteContentConfig;
+  adminUser: string;
+  onClose: () => void;
+  onUpdateConfig: (next: SiteContentConfig) => void;
+  onResetConfig: () => void;
+  onLogout: () => void;
+}
+
+export function AdminPanelModal({
+  isOpen,
+  initialTab = 'hero',
+  editingGalleryItemId = null,
+  config,
+  adminUser,
+  onClose,
+  onUpdateConfig,
+  onResetConfig,
+  onLogout,
+}: AdminPanelModalProps) {
+  const [activeTab, setActiveTab] = useState<EditorTab>(initialTab);
+  const [draft, setDraft] = useState<SiteContentConfig>(config);
+  const [savedFeedback, setSavedFeedback] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Add / edit single gallery item form
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(
+    editingGalleryItemId
+  );
+  const [imgUrl, setImgUrl] = useState('');
+  const [imgTitle, setImgTitle] = useState('');
+  const [imgCategory, setImgCategory] =
+    useState<Exclude<GalleryCategory, 'Todas'>>('Azul cobalto');
+  const [imgLocation, setImgLocation] = useState('');
+  const [imgYear, setImgYear] = useState('2026');
+  const [imgAlt, setImgAlt] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setDraft(config);
+    setActiveTab(initialTab);
+    setErrorMsg(null);
+    setSavedFeedback(null);
+
+    if (editingGalleryItemId) {
+      const target = config.galleryItems.find(
+        (g) => g.id === editingGalleryItemId
+      );
+      if (target) {
+        setSelectedItemId(target.id);
+        setImgUrl(target.imageUrl);
+        setImgTitle(target.title);
+        setImgCategory(target.category);
+        setImgLocation(target.location);
+        setImgYear(target.year);
+        setImgAlt(target.alt);
+      }
+    } else {
+      resetItemForm();
+    }
+  }, [isOpen, initialTab, editingGalleryItemId, config]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  function resetItemForm() {
+    setSelectedItemId(null);
+    setImgUrl('');
+    setImgTitle('');
+    setImgCategory('Azul cobalto');
+    setImgLocation('');
+    setImgYear(String(new Date().getFullYear()));
+    setImgAlt('');
+  }
+
+  function flashSaved(msg: string) {
+    setSavedFeedback(msg);
+    setTimeout(() => setSavedFeedback(null), 2600);
+  }
+
+  const handleSaveGeneral = (e: FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    const parsedVideo = parseExternalVideoUrl(draft.videoUrl);
+    if (!parsedVideo) {
+      setActiveTab('hero');
+      setErrorMsg(
+        'El enlace del video debe ser una URL válida (YouTube, Vimeo o archivo MP4/WebM con https://).'
+      );
+      return;
+    }
+    onUpdateConfig(draft);
+    flashSaved('Cambios guardados correctamente.');
+  };
+
+  const handleSaveGalleryItem = (e: FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+
+    if (!isValidHttpsUrl(imgUrl)) {
+      setErrorMsg('Ingresa una URL externa válida (https://...) para la imagen.');
+      return;
+    }
+    if (!imgTitle.trim()) {
+      setErrorMsg('Escribe un título para la imagen.');
+      return;
+    }
+
+    let nextItems: GalleryItem[];
+    if (selectedItemId) {
+      nextItems = draft.galleryItems.map((item) =>
+        item.id === selectedItemId
+          ? {
+              ...item,
+              imageUrl: imgUrl.trim(),
+              title: imgTitle.trim(),
+              category: imgCategory,
+              location: imgLocation.trim() || 'Enlace externo',
+              year: imgYear.trim() || String(new Date().getFullYear()),
+              alt: imgAlt.trim() || imgTitle.trim(),
+            }
+          : item
+      );
+    } else {
+      const newItem: GalleryItem = {
+        id: `img-${Date.now()}`,
+        imageUrl: imgUrl.trim(),
+        title: imgTitle.trim(),
+        category: imgCategory,
+        location: imgLocation.trim() || 'Enlace externo',
+        year: imgYear.trim() || String(new Date().getFullYear()),
+        alt: imgAlt.trim() || imgTitle.trim(),
+        aspectHint: '4:3',
+        isCustom: true,
+      };
+      nextItems = [newItem, ...draft.galleryItems];
+    }
+
+    const updated = {...draft, galleryItems: nextItems};
+    setDraft(updated);
+    onUpdateConfig(updated);
+    resetItemForm();
+    flashSaved(selectedItemId ? 'Imagen actualizada.' : 'Imagen añadida a la galería.');
+  };
+
+  const handleStartEditItem = (item: GalleryItem) => {
+    setSelectedItemId(item.id);
+    setImgUrl(item.imageUrl);
+    setImgTitle(item.title);
+    setImgCategory(item.category);
+    setImgLocation(item.location);
+    setImgYear(item.year);
+    setImgAlt(item.alt);
+    setErrorMsg(null);
+  };
+
+  const handleDeleteItem = (id: string) => {
+    const nextItems = draft.galleryItems.filter((item) => item.id !== id);
+    const updated = {...draft, galleryItems: nextItems};
+    setDraft(updated);
+    onUpdateConfig(updated);
+    if (selectedItemId === id) {
+      resetItemForm();
+    }
+    flashSaved('Imagen eliminada.');
+  };
+
+  const handleMoveItem = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= draft.galleryItems.length) return;
+    const nextItems = [...draft.galleryItems];
+    const [moved] = nextItems.splice(index, 1);
+    nextItems.splice(target, 0, moved);
+    const updated = {...draft, galleryItems: nextItems};
+    setDraft(updated);
+    onUpdateConfig(updated);
+  };
+
+  const handleExportJson = () => {
+    const blob = new Blob([JSON.stringify(draft, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'monolito-config.json';
+    link.click();
+    URL.revokeObjectURL(url);
+    flashSaved('Configuración descargada en JSON.');
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="admin-panel-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Top Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-[#07090E] px-6 py-4 text-white">
+          <div>
+            <h2 id="admin-panel-title" className="text-lg font-semibold">
+              Panel de administración
+            </h2>
+            <p className="text-xs text-slate-400">
+              Conectado como <span className="text-white">{adminUser}</span> ·
+              Edición completa de textos, video y galería
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportJson}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:border-[#3B82F6] hover:text-[#60A5FA]"
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Exportar JSON</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                onLogout();
+                onClose();
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600"
+            >
+              <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Cerrar sesión</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar panel"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-slate-50 px-6 py-3">
+          <div role="tablist" className="flex flex-wrap gap-1 rounded-lg bg-slate-200/70 p-1">
+            {(
+              [
+                {id: 'hero', label: 'Portada y Video'},
+                {id: 'gallery', label: 'Galería de Imágenes'},
+                {id: 'sections', label: 'Enfoque, Contacto y Pie'},
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setErrorMsg(null);
+                }}
+                className={`whitespace-nowrap rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-[#07090E] text-white'
+                    : 'text-slate-600 hover:text-[#07090E]'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              onResetConfig();
+              flashSaved('Contenido restaurado a los valores iniciales.');
+            }}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 transition-colors hover:text-[#2563EB]"
+          >
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Restaurar valores iniciales</span>
+          </button>
+        </div>
+
+        {/* Feedback Banner */}
+        {(savedFeedback || errorMsg) && (
+          <div className="border-b border-slate-200 px-6 py-2.5">
+            {savedFeedback && (
+              <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#2563EB]">
+                <Check className="h-4 w-4" aria-hidden="true" />
+                <span>{savedFeedback}</span>
+              </p>
+            )}
+            {errorMsg && (
+              <p role="alert" className="text-xs font-semibold text-red-600">
+                {errorMsg}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {activeTab === 'hero' && (
+            <form onSubmit={handleSaveGeneral} className="space-y-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-semibold text-[#07090E]">
+                    Nombre de marca (Barra superior y pie)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={draft.brandName}
+                    onChange={(e) =>
+                      setDraft({...draft, brandName: e.target.value})
+                    }
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#07090E]">
+                    Antetítulo del héroe
+                  </label>
+                  <input
+                    type="text"
+                    value={draft.heroKicker}
+                    onChange={(e) =>
+                      setDraft({...draft, heroKicker: e.target.value})
+                    }
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-[#07090E]">
+                    Título principal del héroe
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={draft.heroTitle}
+                    onChange={(e) =>
+                      setDraft({...draft, heroTitle: e.target.value})
+                    }
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#07090E]">
+                    Texto del botón principal
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={draft.heroCtaLabel}
+                    onChange={(e) =>
+                      setDraft({...draft, heroCtaLabel: e.target.value})
+                    }
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#07090E]">
+                  Descripción del héroe
+                </label>
+                <textarea
+                  rows={3}
+                  value={draft.heroDescription}
+                  onChange={(e) =>
+                    setDraft({...draft, heroDescription: e.target.value})
+                  }
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                />
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <h3 className="text-sm font-semibold text-[#07090E]">
+                  Video incrustado mediante enlace externo
+                </h3>
+                <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#07090E]">
+                      URL del video (YouTube, Vimeo o MP4/WebM)
+                    </label>
+                    <input
+                      type="url"
+                      required
+                      value={draft.videoUrl}
+                      onChange={(e) =>
+                        setDraft({...draft, videoUrl: e.target.value})
+                      }
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#07090E]">
+                      Título del video
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.videoTitle}
+                      onChange={(e) =>
+                        setDraft({...draft, videoTitle: e.target.value})
+                      }
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-[#07090E]">
+                  Tres bloques inferiores de la portada
+                </h3>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  {draft.heroPillars.map((pillar, idx) => (
+                    <div
+                      key={pillar.id}
+                      className="space-y-2 rounded-lg border border-slate-200 p-3"
+                    >
+                      <input
+                        type="text"
+                        value={pillar.title}
+                        onChange={(e) => {
+                          const next = [...draft.heroPillars];
+                          next[idx] = {...pillar, title: e.target.value};
+                          setDraft({...draft, heroPillars: next});
+                        }}
+                        className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-xs font-semibold focus:border-[#2563EB] focus:outline-none"
+                      />
+                      <textarea
+                        rows={3}
+                        value={pillar.description}
+                        onChange={(e) => {
+                          const next = [...draft.heroPillars];
+                          next[idx] = {
+                            ...pillar,
+                            description: e.target.value,
+                          };
+                          setDraft({...draft, heroPillars: next});
+                        }}
+                        className="w-full rounded border border-slate-300 px-2.5 py-1.5 text-xs focus:border-[#2563EB] focus:outline-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  className="rounded-lg bg-[#2563EB] px-5 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8]"
+                >
+                  Guardar cambios de portada
+                </button>
+              </div>
+            </form>
+          )}
+
+          {activeTab === 'gallery' && (
+            <div className="space-y-8">
+              {/* Gallery Section Header Editor */}
+              <form
+                onSubmit={handleSaveGeneral}
+                className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-[#07090E]">
+                    Encabezado de la sección galería
+                  </h3>
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-[#07090E] px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#2563EB]"
+                  >
+                    Guardar textos
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <input
+                    type="text"
+                    value={draft.galleryKicker}
+                    onChange={(e) =>
+                      setDraft({...draft, galleryKicker: e.target.value})
+                    }
+                    placeholder="Antetítulo"
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs focus:border-[#2563EB] focus:outline-none"
+                  />
+                  <input
+                    type="text"
+                    value={draft.galleryTitle}
+                    onChange={(e) =>
+                      setDraft({...draft, galleryTitle: e.target.value})
+                    }
+                    placeholder="Título de galería"
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs focus:border-[#2563EB] focus:outline-none"
+                  />
+                </div>
+                <textarea
+                  rows={2}
+                  value={draft.galleryDescription}
+                  onChange={(e) =>
+                    setDraft({...draft, galleryDescription: e.target.value})
+                  }
+                  placeholder="Descripción"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs focus:border-[#2563EB] focus:outline-none"
+                />
+              </form>
+
+              {/* Add or Edit Image Form */}
+              <form
+                onSubmit={handleSaveGalleryItem}
+                className="space-y-4 rounded-xl border border-slate-200 p-5"
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-[#07090E]">
+                    {selectedItemId
+                      ? 'Editar imagen seleccionada'
+                      : 'Añadir nueva imagen mediante enlace externo'}
+                  </h3>
+                  {selectedItemId && (
+                    <button
+                      type="button"
+                      onClick={resetItemForm}
+                      className="text-xs font-medium text-slate-500 hover:text-[#07090E]"
+                    >
+                      Cancelar edición
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#07090E]">
+                      URL externa de la imagen (HTTPS)
+                    </label>
+                    <input
+                      type="url"
+                      required
+                      value={imgUrl}
+                      onChange={(e) => setImgUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#07090E]">
+                      Título de la obra
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={imgTitle}
+                      onChange={(e) => setImgTitle(e.target.value)}
+                      placeholder="Fachada minimalista en azul"
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#07090E]">
+                      Categoría
+                    </label>
+                    <select
+                      value={imgCategory}
+                      onChange={(e) =>
+                        setImgCategory(
+                          e.target.value as Exclude<GalleryCategory, 'Todas'>
+                        )
+                      }
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                    >
+                      <option value="Azul cobalto">Azul cobalto</option>
+                      <option value="Monocromo">Monocromo</option>
+                      <option value="Geometría">Geometría</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#07090E]">
+                      Ubicación
+                    </label>
+                    <input
+                      type="text"
+                      value={imgLocation}
+                      onChange={(e) => setImgLocation(e.target.value)}
+                      placeholder="Madrid, España"
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#07090E]">
+                      Año
+                    </label>
+                    <input
+                      type="text"
+                      value={imgYear}
+                      onChange={(e) => setImgYear(e.target.value)}
+                      placeholder="2026"
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#07090E]">
+                    Descripción alternativa (accesibilidad)
+                  </label>
+                  <input
+                    type="text"
+                    value={imgAlt}
+                    onChange={(e) => setImgAlt(e.target.value)}
+                    placeholder="Descripción breve de lo que muestra la fotografía"
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#2563EB] px-5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8]"
+                  >
+                    <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>
+                      {selectedItemId ? 'Actualizar imagen' : 'Añadir imagen'}
+                    </span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Existing Gallery Items List */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-[#07090E]">
+                  Imágenes actuales ({draft.galleryItems.length})
+                </h3>
+                <div className="divide-y divide-slate-200 rounded-xl border border-slate-200">
+                  {draft.galleryItems.map((item, idx) => (
+                    <div
+                      key={item.id}
+                      className="flex flex-wrap items-center justify-between gap-4 p-3 sm:flex-nowrap"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <img
+                          src={item.imageUrl}
+                          alt={item.title}
+                          referrerPolicy="no-referrer"
+                          className="h-12 w-16 shrink-0 rounded-md bg-slate-900 object-cover"
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-[#07090E]">
+                            {item.title}
+                          </p>
+                          <p className="truncate text-xs text-slate-500">
+                            {item.category} · {item.location} · {item.year}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleMoveItem(idx, -1)}
+                          disabled={idx === 0}
+                          aria-label="Subir posición"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30"
+                        >
+                          <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveItem(idx, 1)}
+                          disabled={idx === draft.galleryItems.length - 1}
+                          aria-label="Bajar posición"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30"
+                        >
+                          <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditItem(item)}
+                          aria-label={`Editar ${item.title}`}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-[#2563EB]"
+                        >
+                          <Pencil className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteItem(item.id)}
+                          aria-label={`Eliminar ${item.title}`}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-600"
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'sections' && (
+            <form onSubmit={handleSaveGeneral} className="space-y-6">
+              {/* Enfoque Section */}
+              <div className="space-y-4 rounded-xl border border-slate-200 p-5">
+                <h3 className="text-sm font-semibold text-[#07090E]">
+                  Sección Enfoque
+                </h3>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <input
+                    type="text"
+                    value={draft.approachKicker}
+                    onChange={(e) =>
+                      setDraft({...draft, approachKicker: e.target.value})
+                    }
+                    placeholder="Antetítulo"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                  />
+                  <input
+                    type="text"
+                    value={draft.approachTitle}
+                    onChange={(e) =>
+                      setDraft({...draft, approachTitle: e.target.value})
+                    }
+                    placeholder="Título"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                  />
+                </div>
+                <textarea
+                  rows={2}
+                  value={draft.approachDescription}
+                  onChange={(e) =>
+                    setDraft({...draft, approachDescription: e.target.value})
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                />
+
+                <div className="space-y-3 pt-2">
+                  {draft.approachItems.map((item, idx) => (
+                    <div
+                      key={item.id}
+                      className="grid grid-cols-1 gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-3"
+                    >
+                      <input
+                        type="text"
+                        value={item.title}
+                        onChange={(e) => {
+                          const next = [...draft.approachItems];
+                          next[idx] = {...item, title: e.target.value};
+                          setDraft({...draft, approachItems: next});
+                        }}
+                        className="rounded border border-slate-300 px-2.5 py-1.5 text-xs font-semibold focus:border-[#2563EB] focus:outline-none"
+                      />
+                      <textarea
+                        rows={2}
+                        value={item.description}
+                        onChange={(e) => {
+                          const next = [...draft.approachItems];
+                          next[idx] = {...item, description: e.target.value};
+                          setDraft({...draft, approachItems: next});
+                        }}
+                        className="rounded border border-slate-300 px-2.5 py-1.5 text-xs sm:col-span-2 focus:border-[#2563EB] focus:outline-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Contacto & Footer */}
+              <div className="space-y-4 rounded-xl border border-slate-200 p-5">
+                <h3 className="text-sm font-semibold text-[#07090E]">
+                  Sección Contacto y Pie de página
+                </h3>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <input
+                    type="text"
+                    value={draft.contactTitle}
+                    onChange={(e) =>
+                      setDraft({...draft, contactTitle: e.target.value})
+                    }
+                    placeholder="Título de contacto"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                  />
+                  <input
+                    type="email"
+                    value={draft.contactEmail}
+                    onChange={(e) =>
+                      setDraft({...draft, contactEmail: e.target.value})
+                    }
+                    placeholder="Correo electrónico"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                  />
+                </div>
+                <textarea
+                  rows={2}
+                  value={draft.contactDescription}
+                  onChange={(e) =>
+                    setDraft({...draft, contactDescription: e.target.value})
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <input
+                    type="text"
+                    value={draft.contactLocation}
+                    onChange={(e) =>
+                      setDraft({...draft, contactLocation: e.target.value})
+                    }
+                    placeholder="Ubicación"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                  />
+                  <input
+                    type="text"
+                    value={draft.footerTagline}
+                    onChange={(e) =>
+                      setDraft({...draft, footerTagline: e.target.value})
+                    }
+                    placeholder="Nota del pie"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                  />
+                  <input
+                    type="text"
+                    value={draft.footerCopyright}
+                    onChange={(e) =>
+                      setDraft({...draft, footerCopyright: e.target.value})
+                    }
+                    placeholder="Copyright"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  className="rounded-lg bg-[#2563EB] px-5 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8]"
+                >
+                  Guardar secciones
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
