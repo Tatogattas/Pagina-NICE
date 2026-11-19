@@ -23,6 +23,7 @@ import {
   isValidHttpsUrl,
   isVideoGalleryItem,
   normalizeExternalMediaInput,
+  normalizeImageUrl,
   parseExternalVideoUrl,
   type GalleryCategory,
   type GalleryItem,
@@ -243,7 +244,7 @@ export function AdminPanelModal({
     }
 
     let effectiveMediaType = itemMediaType;
-    let finalImageUrl = normalizeExternalMediaInput(imgUrl);
+    let finalImageUrl = normalizeImageUrl(imgUrl);
     let finalVideoUrl: string | undefined;
 
     if (effectiveMediaType === 'image' && isKnownVideoUrl(finalImageUrl)) {
@@ -957,7 +958,7 @@ export function AdminPanelModal({
                               'Se detectó un enlace de video; cambiado automáticamente a modo Video.'
                             );
                           } else {
-                            setImgUrl(normalized);
+                            setImgUrl(normalizeImageUrl(normalized));
                           }
                         }}
                         placeholder="https://..."
@@ -1084,7 +1085,7 @@ export function AdminPanelModal({
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         {thumb ? (
-                          <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded-md bg-slate-900">
+                          <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded-md bg-slate-100">
                             <img
                               src={thumb}
                               alt={item.title}

@@ -5,6 +5,7 @@ import {
   extractDomainLabel,
   getItemVideoUrl,
   isVideoGalleryItem,
+  normalizeImageUrl,
   parseExternalVideoUrl,
   type GalleryItem,
 } from '../data/externalMedia';
@@ -23,6 +24,10 @@ export function LightboxModal({
   onNavigate,
 }: LightboxModalProps) {
   const [videoLoadError, setVideoLoadError] = useState(false);
+  const [imgAttempt, setImgAttempt] = useState<{
+    url: string;
+    stage: 'no-referrer' | 'default-referrer' | 'failed';
+  }>({url: '', stage: 'no-referrer'});
 
   const isOpen = activeIndex !== null && items[activeIndex] !== undefined;
   const currentItem = isOpen ? items[activeIndex] : null;
@@ -193,14 +198,48 @@ export function LightboxModal({
               )}
             </div>
           )
-        ) : (
-          <img
-            src={currentItem.imageUrl}
-            alt={currentItem.alt}
-            referrerPolicy="no-referrer"
-            className="max-h-[74vh] w-auto max-w-full rounded-lg border border-white/10 object-contain"
-          />
-        )}
+        ) : (() => {
+          const normalizedImg = normalizeImageUrl(currentItem.imageUrl || '');
+          const stage =
+            imgAttempt.url === normalizedImg ? imgAttempt.stage : 'no-referrer';
+          return stage === 'failed' ? (
+            <div className="flex aspect-video w-full max-w-2xl flex-col items-center justify-center gap-3 rounded-xl border border-white/15 bg-[#0B111D] p-8 text-center">
+              <p className="text-sm font-medium text-white">
+                No se pudo cargar la imagen ampliada desde el enlace externo.
+              </p>
+              {normalizedImg && (
+                <a
+                  href={normalizedImg}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#2563EB] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8]"
+                >
+                  <span>Abrir imagen en nueva pestaña</span>
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                </a>
+              )}
+            </div>
+          ) : (
+            <img
+              key={`${normalizedImg}-${stage}`}
+              src={normalizedImg}
+              alt={currentItem.alt}
+              referrerPolicy={
+                stage === 'no-referrer'
+                  ? 'no-referrer'
+                  : 'strict-origin-when-cross-origin'
+              }
+              onError={() => {
+                if (stage === 'no-referrer') {
+                  setImgAttempt({url: normalizedImg, stage: 'default-referrer'});
+                } else {
+                  setImgAttempt({url: normalizedImg, stage: 'failed'});
+                }
+              }}
+              className="max-h-[74vh] w-auto max-w-full rounded-lg border border-white/10 object-contain"
+            />
+          );
+        })()}
 
         <button
           type="button"

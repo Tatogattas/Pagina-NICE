@@ -7,13 +7,14 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
-import {useEffect, useState} from 'react';
+import {useState} from 'react';
 import {
   buildAutoplayEmbedUrl,
   extractDomainLabel,
   getGalleryItemThumbnail,
   getItemVideoUrl,
   isVideoGalleryItem,
+  normalizeImageUrl,
   parseExternalVideoUrl,
   type GalleryCategory,
   type GalleryItem,
@@ -57,25 +58,28 @@ function GalleryCard({
   onEdit,
   onRemove,
 }: GalleryCardProps) {
-  const [loaded, setLoaded] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [imgAttempt, setImgAttempt] = useState<{
+    url: string;
+    stage: 'no-referrer' | 'default-referrer' | 'failed';
+  }>({url: '', stage: 'no-referrer'});
   const [isPlayingInline, setIsPlayingInline] = useState(false);
-  const [inlineVideoFailed, setInlineVideoFailed] = useState(false);
+  const [inlineFailedUrl, setInlineFailedUrl] = useState<string | null>(null);
 
   const isVideo = isVideoGalleryItem(item);
   const effectiveVideoUrl = isVideo ? getItemVideoUrl(item) : '';
   const parsedVideo = effectiveVideoUrl
     ? parseExternalVideoUrl(effectiveVideoUrl)
     : null;
-  const thumbnailUrl = isVideo ? getGalleryItemThumbnail(item) : item.imageUrl;
-  const hasThumbnail = Boolean(thumbnailUrl) && !failed;
+  const thumbnailUrl = isVideo
+    ? getGalleryItemThumbnail(item)
+    : normalizeImageUrl(item.imageUrl || '');
 
-  useEffect(() => {
-    setLoaded(false);
-    setFailed(false);
-    setIsPlayingInline(false);
-    setInlineVideoFailed(false);
-  }, [item.id, item.imageUrl, effectiveVideoUrl]);
+  const currentStage =
+    imgAttempt.url === thumbnailUrl ? imgAttempt.stage : 'no-referrer';
+  const failed = Boolean(thumbnailUrl) && currentStage === 'failed';
+  const inlineVideoFailed =
+    Boolean(effectiveVideoUrl) && inlineFailedUrl === effectiveVideoUrl;
+  const hasThumbnail = Boolean(thumbnailUrl) && !failed;
 
   // Show embedded video directly inside the gallery card when user clicks Play
   // OR immediately when the platform (e.g. Facebook / Instagram) has no static poster URL
@@ -96,6 +100,15 @@ function GalleryCard({
       ? 'aspect-[4/5] sm:aspect-[4/3]'
       : 'aspect-[4/3]';
 
+  const handleImageError = () => {
+    if (!thumbnailUrl) return;
+    if (currentStage === 'no-referrer') {
+      setImgAttempt({url: thumbnailUrl, stage: 'default-referrer'});
+    } else {
+      setImgAttempt({url: thumbnailUrl, stage: 'failed'});
+    }
+  };
+
   return (
     <article
       className={`group relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition-colors duration-200 hover:border-[#2563EB] ${
@@ -113,7 +126,7 @@ function GalleryCard({
               key={iframeSrc}
               src={iframeSrc}
               title={item.title}
-              className="h-full w-full border-0"
+              className="absolute inset-0 h-full w-full border-0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               referrerPolicy="strict-origin-when-cross-origin"
               allowFullScreen
@@ -126,8 +139,8 @@ function GalleryCard({
               autoPlay={isPlayingInline}
               playsInline
               preload="metadata"
-              onError={() => setInlineVideoFailed(true)}
-              className="h-full w-full bg-black object-cover"
+              onError={() => setInlineFailedUrl(effectiveVideoUrl)}
+              className="absolute inset-0 h-full w-full bg-black object-cover"
             />
           )}
         </div>
@@ -146,29 +159,24 @@ function GalleryCard({
               ? `Reproducir video: ${item.title}`
               : `Ampliar imagen: ${item.title}`
           }
-          className={`relative w-full overflow-hidden bg-[#0A0E17] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB] ${frameSizeClass}`}
+          className={`relative block w-full overflow-hidden bg-slate-100 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB] ${frameSizeClass}`}
         >
-          {hasThumbnail && !loaded && (
-            <div
-              aria-hidden="true"
-              className="absolute inset-0 animate-pulse bg-slate-900"
-            />
-          )}
-
           {hasThumbnail ? (
             <img
+              key={`${thumbnailUrl}-${currentStage}`}
               src={thumbnailUrl}
               alt={item.alt || item.title}
-              loading="lazy"
-              referrerPolicy="no-referrer"
-              onLoad={() => setLoaded(true)}
-              onError={() => setFailed(true)}
-              className={`h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.02] ${
-                loaded ? 'opacity-100' : 'opacity-0'
-              }`}
+              decoding="async"
+              referrerPolicy={
+                currentStage === 'no-referrer'
+                  ? 'no-referrer'
+                  : 'strict-origin-when-cross-origin'
+              }
+              onError={handleImageError}
+              className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.02]"
             />
           ) : isVideo ? (
-            <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-[#07090E] via-[#0F1B33] to-[#1E3A8A] p-6 text-center text-white">
+            <div className="absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-[#07090E] via-[#0F1B33] to-[#1E3A8A] p-6 text-center text-white">
               <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-[#2563EB] text-white shadow-lg transition-transform duration-200 group-hover:scale-105">
                 <Play className="ml-0.5 h-5 w-5 fill-current" aria-hidden="true" />
               </span>
@@ -182,22 +190,24 @@ function GalleryCard({
               </div>
             </div>
           ) : (
-            <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-[#07090E] via-[#0F1B33] to-[#1E3A8A] p-6 text-center text-white">
-              <ImageIcon className="h-7 w-7 text-[#60A5FA]" aria-hidden="true" />
-              <p className="text-sm font-medium">{item.title}</p>
-              <span className="font-mono text-xs text-slate-300">
-                {extractDomainLabel(item.imageUrl)}
+            <div className="absolute inset-0 flex h-full w-full flex-col items-center justify-center gap-2 bg-slate-100 p-6 text-center text-[#07090E]">
+              <ImageIcon className="h-7 w-7 text-[#2563EB]" aria-hidden="true" />
+              <p className="text-sm font-semibold">{item.title}</p>
+              <span className="font-mono text-xs text-slate-500">
+                No se pudo cargar desde {extractDomainLabel(thumbnailUrl || item.imageUrl)}
               </span>
             </div>
           )}
 
-          <div
-            className={`pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent transition-opacity duration-200 ${
-              isVideo && hasThumbnail
-                ? 'opacity-70 group-hover:opacity-90'
-                : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
-            }`}
-          />
+          {hasThumbnail && (
+            <div
+              className={`pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent transition-opacity duration-200 ${
+                isVideo
+                  ? 'opacity-60 group-hover:opacity-85'
+                  : 'opacity-0 group-hover:opacity-100'
+              }`}
+            />
+          )}
 
           {isVideo && hasThumbnail ? (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -206,8 +216,9 @@ function GalleryCard({
               </span>
             </div>
           ) : (
-            !isVideo && (
-              <div className="pointer-events-none absolute right-4 bottom-4 flex h-9 w-9 items-center justify-center rounded-lg bg-[#2563EB] text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+            !isVideo &&
+            hasThumbnail && (
+              <div className="pointer-events-none absolute right-4 bottom-4 flex h-9 w-9 items-center justify-center rounded-lg bg-[#2563EB] text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                 <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
               </div>
             )

@@ -177,13 +177,46 @@ export const DEFAULT_GALLERY_ITEMS: GalleryItem[] = [
 export function normalizeExternalMediaInput(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return '';
-  if (trimmed.toLowerCase().includes('<iframe')) {
+  if (
+    trimmed.toLowerCase().includes('<iframe') ||
+    trimmed.toLowerCase().includes('<img')
+  ) {
     const srcMatch = trimmed.match(/src\s*=\s*["']([^"']+)["']/i);
     if (srcMatch?.[1]) {
       return srcMatch[1].trim();
     }
   }
   return trimmed;
+}
+
+export function normalizeImageUrl(raw: string): string {
+  const clean = normalizeExternalMediaInput(raw);
+  if (!clean) return '';
+
+  try {
+    const url = new URL(clean);
+    const host = url.hostname.toLowerCase();
+
+    // Google Drive sharing link -> direct renderable image URL
+    if (host === 'drive.google.com') {
+      const fileMatch = url.pathname.match(/\/file\/d\/([^/]+)/i);
+      const fileId = fileMatch?.[1] || url.searchParams.get('id');
+      if (fileId) {
+        return `https://lh3.googleusercontent.com/d/${encodeURIComponent(fileId)}`;
+      }
+    }
+
+    // Dropbox share link -> direct raw media
+    if (host.endsWith('dropbox.com')) {
+      url.searchParams.delete('dl');
+      url.searchParams.set('raw', '1');
+      return url.toString();
+    }
+
+    return clean;
+  } catch {
+    return clean;
+  }
 }
 
 export function isValidHttpsUrl(raw: string): boolean {
@@ -398,7 +431,7 @@ export function isVideoGalleryItem(item: GalleryItem): boolean {
 }
 
 export function getGalleryItemThumbnail(item: GalleryItem): string {
-  const manual = item.imageUrl?.trim();
+  const manual = normalizeImageUrl(item.imageUrl || '');
   if (manual && !isKnownVideoUrl(manual)) {
     return manual;
   }

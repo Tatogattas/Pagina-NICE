@@ -8,6 +8,7 @@ import {
 import {
   isKnownVideoUrl,
   normalizeExternalMediaInput,
+  normalizeImageUrl,
 } from '../data/externalMedia';
 import {
   DEFAULT_SITE_CONFIG,
@@ -59,7 +60,7 @@ export function sanitizeSiteConfig(
     galleryItems: (Array.isArray(raw.galleryItems) ? raw.galleryItems : [])
       .slice(0, 50)
       .map((item, idx) => {
-        const normalizedImage = normalizeExternalMediaInput(item.imageUrl || '');
+        const normalizedImage = normalizeImageUrl(item.imageUrl || '');
         const normalizedVideo = normalizeExternalMediaInput(item.videoUrl || '');
         const inferredVideo =
           !normalizedVideo && normalizedImage && isKnownVideoUrl(normalizedImage)
