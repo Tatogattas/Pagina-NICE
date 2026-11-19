@@ -28,11 +28,11 @@ export function sanitizeSiteConfig(
   raw: SiteContentConfig
 ): SiteContentConfig {
   return {
-    brandName: clampStr(raw.brandName, 80, DEFAULT_SITE_CONFIG.brandName) || 'Monolito',
+    brandName: clampStr(raw.brandName, 80, DEFAULT_SITE_CONFIG.brandName) || DEFAULT_SITE_CONFIG.brandName,
     heroKicker: clampStr(raw.heroKicker, 120),
     heroTitle: clampStr(raw.heroTitle, 200, DEFAULT_SITE_CONFIG.heroTitle) || DEFAULT_SITE_CONFIG.heroTitle,
     heroDescription: clampStr(raw.heroDescription, 600),
-    heroCtaLabel: clampStr(raw.heroCtaLabel, 60, 'Explorar galería') || 'Explorar galería',
+    heroCtaLabel: clampStr(raw.heroCtaLabel, 60, DEFAULT_SITE_CONFIG.heroCtaLabel) || DEFAULT_SITE_CONFIG.heroCtaLabel,
     videoUrl:
       clampStr(raw.videoUrl, 1000, DEFAULT_SITE_CONFIG.videoUrl) ||
       DEFAULT_SITE_CONFIG.videoUrl,

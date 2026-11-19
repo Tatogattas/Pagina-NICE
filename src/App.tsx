@@ -492,7 +492,7 @@ export default function App() {
               </p>
               <div className="mt-8 space-y-2 border-t border-slate-200 pt-6 text-sm text-slate-600">
                 <p>
-                  <span className="font-medium text-[#07090E]">Estudio:</span>{' '}
+                  <span className="font-medium text-[#07090E]">Correo:</span>{' '}
                   {siteConfig.contactEmail}
                 </p>
                 <p>
@@ -566,7 +566,7 @@ export default function App() {
                         required
                         value={contactEmail}
                         onChange={(e) => setContactEmail(e.target.value)}
-                        placeholder="clara@estudio.com"
+                        placeholder="clara@correo.com"
                         className="mt-1.5 w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-[#07090E] placeholder:text-slate-400 focus:border-[#2563EB] focus:outline-none"
                       />
                     </div>
@@ -602,7 +602,7 @@ export default function App() {
                       required
                       value={contactMessage}
                       onChange={(e) => setContactMessage(e.target.value)}
-                      placeholder="Cuéntanos sobre tu proyecto o serie visual..."
+                      placeholder="Cuéntanos sobre tus objetivos físicos, lesiones previas o consulta..."
                       className="mt-1.5 w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-[#07090E] placeholder:text-slate-400 focus:border-[#2563EB] focus:outline-none"
                     />
                   </div>

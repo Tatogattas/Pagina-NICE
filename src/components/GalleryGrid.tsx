@@ -11,9 +11,9 @@ import {extractDomainLabel} from '../data/externalMedia';
 
 const CATEGORIES: GalleryCategory[] = [
   'Todas',
-  'Azul cobalto',
-  'Monocromo',
-  'Geometría',
+  'Movilidad primal',
+  'Fuerza funcional',
+  'Rehabilitación',
 ];
 
 interface GalleryGridProps {

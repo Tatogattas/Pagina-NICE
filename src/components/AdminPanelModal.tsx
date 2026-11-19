@@ -64,7 +64,7 @@ export function AdminPanelModal({
   const [imgUrl, setImgUrl] = useState('');
   const [imgTitle, setImgTitle] = useState('');
   const [imgCategory, setImgCategory] =
-    useState<Exclude<GalleryCategory, 'Todas'>>('Azul cobalto');
+    useState<Exclude<GalleryCategory, 'Todas'>>('Movilidad primal');
   const [imgLocation, setImgLocation] = useState('');
   const [imgYear, setImgYear] = useState('2026');
   const [imgAlt, setImgAlt] = useState('');
@@ -109,7 +109,7 @@ export function AdminPanelModal({
     setSelectedItemId(null);
     setImgUrl('');
     setImgTitle('');
-    setImgCategory('Azul cobalto');
+    setImgCategory('Movilidad primal');
     setImgLocation('');
     setImgYear(String(new Date().getFullYear()));
     setImgAlt('');
@@ -307,7 +307,7 @@ export function AdminPanelModal({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'monolito-config.json';
+    link.download = 'nice-config.json';
     link.click();
     URL.revokeObjectURL(url);
     flashSaved('Configuración descargada en JSON.');
@@ -724,7 +724,7 @@ export function AdminPanelModal({
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-[#07090E]">
-                      Título de la obra
+                      Título del ejercicio o práctica
                     </label>
                     <input
                       type="text"
@@ -732,7 +732,7 @@ export function AdminPanelModal({
                       maxLength={160}
                       value={imgTitle}
                       onChange={(e) => setImgTitle(e.target.value)}
-                      placeholder="Fachada minimalista en azul"
+                      placeholder="Movilidad articular en cuadrupedia"
                       className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
                     />
                   </div>
@@ -752,21 +752,21 @@ export function AdminPanelModal({
                       }
                       className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
                     >
-                      <option value="Azul cobalto">Azul cobalto</option>
-                      <option value="Monocromo">Monocromo</option>
-                      <option value="Geometría">Geometría</option>
+                      <option value="Movilidad primal">Movilidad primal</option>
+                      <option value="Fuerza funcional">Fuerza funcional</option>
+                      <option value="Rehabilitación">Rehabilitación</option>
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-[#07090E]">
-                      Ubicación
+                      Área o sede
                     </label>
                     <input
                       type="text"
                       maxLength={120}
                       value={imgLocation}
                       onChange={(e) => setImgLocation(e.target.value)}
-                      placeholder="Madrid, España"
+                      placeholder="Sala funcional · Sede Central"
                       className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
                     />
                   </div>
@@ -794,7 +794,7 @@ export function AdminPanelModal({
                     maxLength={300}
                     value={imgAlt}
                     onChange={(e) => setImgAlt(e.target.value)}
-                    placeholder="Descripción breve de lo que muestra la fotografía"
+                    placeholder="Descripción breve del ejercicio o técnica"
                     className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
                   />
                 </div>

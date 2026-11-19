@@ -37,72 +37,72 @@ export interface SiteContentConfig {
 }
 
 export const DEFAULT_SITE_CONFIG: SiteContentConfig = {
-  brandName: 'Monolito',
-  heroKicker: 'Arquitectura · Luz · Movimiento',
-  heroTitle: 'Formas puras en azul, negro y blanco.',
+  brandName: 'Academia/Clínica NICE',
+  heroKicker: 'Movimiento primal · Fuerza · Rehabilitación',
+  heroTitle: 'Entrenamiento paleo y clínica del movimiento.',
   heroDescription:
-    'Un escaparate visual minimalista construido bajo una premisa técnica estricta: tanto el video principal como la galería fotográfica se enlazan desde servidores externos sin alojar archivos en el servidor propio.',
-  heroCtaLabel: 'Explorar galería',
+    'En Academia/Clínica NICE integramos biomecánica evolutiva, patrones de locomoción natural y fisioterapia funcional para recuperar movilidad articular, fuerza real y salud física duradera.',
+  heroCtaLabel: 'Explorar ejercicios',
   videoUrl: DEFAULT_VIDEO_PRESETS[0].url,
   videoTitle: DEFAULT_VIDEO_PRESETS[0].title,
   heroPillars: [
     {
       id: 'pillar-1',
-      title: '01. Video incrustado por URL',
+      title: '01. Sesiones paleo guiadas',
       description:
-        'Compatible con enlaces externos de YouTube, Vimeo o flujos directos en formato MP4 y WebM.',
+        'Rutinas de flujo corporal, sentadilla profunda, gateos y estabilidad central reproducidas mediante enlace externo.',
     },
     {
       id: 'pillar-2',
-      title: '02. Rejilla de enlaces remotos',
+      title: '02. Fuerza y calistenia natural',
       description:
-        'Fotografía curada en alta resolución servida mediante URLs externas con respaldo visual seguro.',
+        'Patrones multiarticulares con peso corporal y kettlebell orientados a mejorar postura, potencia y equilibrio.',
     },
     {
       id: 'pillar-3',
-      title: '03. Cero archivos alojados',
+      title: '03. Readaptación clínica NICE',
       description:
-        'Ningún recurso de imagen o video reside en el servidor de la aplicación, manteniendo el despliegue ligero.',
+        'Evaluación biomecánica y progresiones seguras para prevenir lesiones y devolver movilidad a cada articulación.',
     },
   ],
-  galleryKicker: 'Colección externa',
-  galleryTitle: 'Galería visual mediante enlaces remotos',
+  galleryKicker: 'Archivo visual NICE',
+  galleryTitle: 'Ejercicios paleo y readaptación clínica',
   galleryDescription:
-    'Cada fotografía se carga directamente desde su origen externo en la red. Haz clic en cualquier obra para abrir el visor a pantalla completa.',
+    'Explora nuestra galería de movimientos funcionales, control postural y rehabilitación servida mediante enlaces externos. Haz clic en cualquier lámina para ampliarla.',
   galleryItems: DEFAULT_GALLERY_ITEMS,
-  approachKicker: 'Principios de diseño',
-  approachTitle: 'Restricción cromática y arquitectura ligera',
+  approachKicker: 'Metodología NICE',
+  approachTitle: 'Movimiento natural respaldado por criterio clínico',
   approachDescription:
-    'Reducir la interfaz a tres tonos esenciales —blanco puro, negro obsidiana y azul cobalto— dirige toda la atención hacia el movimiento del video y la composición fotográfica.',
+    'Entrenamos las capacidades físicas esenciales del cuerpo humano: empujar, traccionar, hacer sentadilla profunda, cargar y desplazarse con fluidez y sin dolor.',
   approachItems: [
     {
       id: 'approach-1',
-      title: '01. Independencia del servidor',
+      title: '01. Diagnóstico biomecánico inicial',
       description:
-        'Todos los medios se referencian únicamente mediante URLs externas verificadas, manteniendo el sitio completamente estático y ligero.',
+        'Detectamos asimetrías de cadera, columna torácica y estabilidad escapular antes de incrementar cargas o complejidad.',
     },
     {
       id: 'approach-2',
-      title: '02. Jerarquía tipográfica y aire',
+      title: '02. Entrenamiento paleo progresivo',
       description:
-        'Cada bloque alterna fondos contrastados y divisores finos en lugar de tarjetas sobrecargadas, priorizando la lectura clara y la proporción visual.',
+        'Priorizamos movimientos funcionales descalzo o con carga libre que fortalecen tendones, fascia y musculatura estabilizadora.',
     },
     {
       id: 'approach-3',
-      title: '03. Visor integrado y accesibilidad',
+      title: '03. Clínica y rendimiento en un solo lugar',
       description:
-        'Navegación completa por teclado en la galería ampliada, contraste verificado y compatibilidad automática con preferencias de movimiento reducido.',
+        'Unimos la exigencia técnica de la academia con protocolos clínicos de recuperación para acompañar cada etapa física.',
     },
   ],
   contactKicker: 'Contacto',
-  contactTitle: 'Comparte una obra o solicita una colaboración',
+  contactTitle: 'Agenda una valoración o consulta clínica',
   contactDescription:
-    'Envíanos un enlace externo a tu pieza audiovisual o serie fotográfica para incluirla en futuras ediciones de la galería.',
-  contactEmail: 'estudio@monolito.example',
-  contactLocation: 'Madrid · Valencia',
+    'Escríbenos para solicitar tu evaluación inicial de movimiento, horarios de sesiones paleo grupales o programas personalizados de rehabilitación.',
+  contactEmail: 'clinica@academianice.example',
+  contactLocation: 'Academia/Clínica NICE · Sede Central',
   footerTagline:
-    'Contenido multimedia servido exclusivamente mediante enlaces externos.',
-  footerCopyright: '© 2026 Monolito',
+    'Academia/Clínica NICE — Ejercicios paleo, movilidad natural y clínica funcional.',
+  footerCopyright: '© 2026 Academia/Clínica NICE',
 };
 
 // SHA-256 hex digests for administrator verification
