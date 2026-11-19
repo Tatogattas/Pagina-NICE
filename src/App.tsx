@@ -592,14 +592,14 @@ export default function App() {
                       htmlFor="contact-ref"
                       className="block text-xs font-semibold text-[#07090E]"
                     >
-                      Enlace externo de referencia (opcional)
+                      Envíanos tu número para ponernos en contacto
                     </label>
                     <input
                       id="contact-ref"
-                      type="url"
+                      type="tel"
                       value={contactReference}
                       onChange={(e) => setContactReference(e.target.value)}
-                      placeholder="https://..."
+                      placeholder="Ej. +503 7123-4567"
                       className="mt-1.5 w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-[#07090E] placeholder:text-slate-400 focus:border-[#2563EB] focus:outline-none"
                     />
                   </div>
