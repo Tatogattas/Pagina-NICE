@@ -63,6 +63,7 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'brandName',
+          'logoUrl',
           'heroKicker',
           'heroTitle',
           'heroDescription',
@@ -89,6 +90,7 @@ service cloud.firestore {
           'updatedAt'
         ])
         && data.brandName is string && data.brandName.size() >= 1 && data.brandName.size() <= 80
+        && (!('logoUrl' in data) || (data.logoUrl is string && data.logoUrl.size() <= 1000 && (data.logoUrl == '' || data.logoUrl.matches('^https?://.+'))))
         && data.heroKicker is string && data.heroKicker.size() <= 120
         && data.heroTitle is string && data.heroTitle.size() >= 1 && data.heroTitle.size() <= 200
         && data.heroDescription is string && data.heroDescription.size() <= 600
@@ -136,6 +138,7 @@ service cloud.firestore {
         && isValidSiteContent(incoming())
         && incoming().diff(existing()).affectedKeys().hasOnly([
           'brandName',
+          'logoUrl',
           'heroKicker',
           'heroTitle',
           'heroDescription',

@@ -1,15 +1,23 @@
-import {Eye, EyeOff, Lock, X} from 'lucide-react';
+import {Eye, EyeOff, X} from 'lucide-react';
 import {useEffect, useState, type FormEvent} from 'react';
-import {verifyAdminCredentials} from '../data/siteConfig';
+import {
+  OFFICIAL_LOGO_URL,
+  verifyAdminCredentials,
+} from '../data/siteConfig';
+import {BrandLogo} from './BrandLogo';
 
 interface AdminLoginModalProps {
   isOpen: boolean;
+  logoUrl?: string;
+  brandName?: string;
   onClose: () => void;
   onSuccess: (username: string) => void;
 }
 
 export function AdminLoginModal({
   isOpen,
+  logoUrl = OFFICIAL_LOGO_URL,
+  brandName = 'Academia/Clínica NICE',
   onClose,
   onSuccess,
 }: AdminLoginModalProps) {
@@ -72,9 +80,11 @@ export function AdminLoginModal({
       >
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#07090E] text-white">
-              <Lock className="h-4 w-4 text-[#60A5FA]" aria-hidden="true" />
-            </div>
+            <BrandLogo
+              src={logoUrl}
+              alt={`Logo oficial de ${brandName}`}
+              sizeClass="h-10 w-10"
+            />
             <div>
               <h2
                 id="admin-login-title"

@@ -10,8 +10,12 @@ export interface TextBlockItem {
   description: string;
 }
 
+export const OFFICIAL_LOGO_URL =
+  'https://scontent.fsal1-1.fna.fbcdn.net/v/t39.30808-6/535602910_1364659108997719_5145766756522964053_n.jpg?stp=dst-jpg_tt6&cstp=mx1000x1000&ctp=s1000x1000&_nc_cat=102&_nc_map=urlgen_bucketless&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=SMBeaytkQywQ7kNvwGypEqS&_nc_oc=AdpEA6k0YDnHOKlaC4Ffz1oQOWUqvwgo2b_lASm-f8n1fZe1ew3a4b176ql5KV1zS68&_nc_zt=23&_nc_ht=scontent.fsal1-1.fna&_nc_gid=eFvdK-kBT9LR6x2o-_zuzA&_nc_ss=7b2a8&oh=00_AQQlhrDhx2OI-1GTtpEVJc0e8HWmqb0-sZz6SCUKLxmQEg&oe=6B04ADDA';
+
 export interface SiteContentConfig {
   brandName: string;
+  logoUrl: string;
   heroKicker: string;
   heroTitle: string;
   heroDescription: string;
@@ -38,6 +42,7 @@ export interface SiteContentConfig {
 
 export const DEFAULT_SITE_CONFIG: SiteContentConfig = {
   brandName: 'Academia/Clínica NICE',
+  logoUrl: OFFICIAL_LOGO_URL,
   heroKicker: 'Movimiento primal · Fuerza · Rehabilitación',
   heroTitle: 'Entrenamiento paleo y clínica del movimiento.',
   heroDescription:

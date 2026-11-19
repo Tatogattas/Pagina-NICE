@@ -4,7 +4,7 @@
 1. Only the known document `/siteContent/main` is publicly readable via `get` (no public `list` scraping).
 2. Writes (`create`, `update`, `delete`) to `/siteContent/main` and `/admins/{adminUid}` are strictly restricted to verified administrators (`request.auth.token.email == "taroret134@gmail.com" && request.auth.token.email_verified == true` or registered in `/admins/{uid}`).
 3. All incoming `SiteContent` payloads must strictly match required keys (`hasAll` + `hasOnly`), enforce string `.size()` limits, enforce `updatedByUid == request.auth.uid`, enforce `updatedAt == request.time`, and enforce bounded array sizes (`heroPillars.size() <= 6`, `galleryItems.size() <= 50`, `approachItems.size() <= 10`).
-4. Video URLs must begin with `http://` or `https://`.
+4. Video URLs must begin with `http://` or `https://`, and optional `logoUrl` must be empty or begin with `http://` or `https://` (max 1000 chars).
 
 ## 2. Dirty Dozen Adversarial Payloads (Must Return PERMISSION_DENIED)
 1. Unauthenticated `create`/`update` on `/siteContent/main`.

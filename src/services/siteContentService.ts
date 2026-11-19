@@ -29,6 +29,11 @@ export function sanitizeSiteConfig(
 ): SiteContentConfig {
   return {
     brandName: clampStr(raw.brandName, 80, DEFAULT_SITE_CONFIG.brandName) || DEFAULT_SITE_CONFIG.brandName,
+    logoUrl: (() => {
+      const candidate = clampStr(raw.logoUrl ?? DEFAULT_SITE_CONFIG.logoUrl, 1000);
+      if (!candidate) return '';
+      return /^https?:\/\/.+/.test(candidate) ? candidate : DEFAULT_SITE_CONFIG.logoUrl;
+    })(),
     heroKicker: clampStr(raw.heroKicker, 120),
     heroTitle: clampStr(raw.heroTitle, 200, DEFAULT_SITE_CONFIG.heroTitle) || DEFAULT_SITE_CONFIG.heroTitle,
     heroDescription: clampStr(raw.heroDescription, 600),
@@ -104,6 +109,10 @@ export function subscribeToSiteContent(
       const merged: SiteContentConfig = {
         ...DEFAULT_SITE_CONFIG,
         ...data,
+        logoUrl:
+          typeof data.logoUrl === 'string' && data.logoUrl.trim()
+            ? data.logoUrl
+            : DEFAULT_SITE_CONFIG.logoUrl,
         heroPillars: Array.isArray(data.heroPillars)
           ? data.heroPillars
           : DEFAULT_SITE_CONFIG.heroPillars,

@@ -6,6 +6,11 @@
       "type": "object",
       "properties": {
         "brandName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "logoUrl": {
+          "type": "string",
+          "maxLength": 1000,
+          "pattern": "^$|^https?://.+"
+        },
         "heroKicker": { "type": "string", "maxLength": 120 },
         "heroTitle": { "type": "string", "minLength": 1, "maxLength": 200 },
         "heroDescription": { "type": "string", "maxLength": 600 },

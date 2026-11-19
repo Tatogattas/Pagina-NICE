@@ -28,6 +28,7 @@ import {
 } from '../data/externalMedia';
 import type {SiteContentConfig} from '../data/siteConfig';
 import {auth, googleProvider} from '../firebase';
+import {BrandLogo} from './BrandLogo';
 
 type EditorTab = 'hero' | 'gallery' | 'sections';
 
@@ -199,6 +200,11 @@ export function AdminPanelModal({
   const handleSaveGeneral = async (e: FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    if (draft.logoUrl.trim() && !isValidHttpsUrl(draft.logoUrl)) {
+      setActiveTab('hero');
+      setErrorMsg('La URL del logo oficial debe comenzar con https:// o http://.');
+      return;
+    }
     const parsedVideo = parseExternalVideoUrl(draft.videoUrl);
     if (!parsedVideo) {
       setActiveTab('hero');
@@ -560,6 +566,31 @@ export function AdminPanelModal({
                     }
                     className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
                   />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center gap-4">
+                  <BrandLogo
+                    src={draft.logoUrl}
+                    alt={`Vista previa del logo de ${draft.brandName}`}
+                    sizeClass="h-12 w-12"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <label className="block text-xs font-semibold text-[#07090E]">
+                      URL del logo oficial (HTTPS)
+                    </label>
+                    <input
+                      type="url"
+                      maxLength={1000}
+                      value={draft.logoUrl}
+                      onChange={(e) =>
+                        setDraft({...draft, logoUrl: e.target.value})
+                      }
+                      placeholder="https://..."
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 

@@ -10,6 +10,7 @@ import {
 import {useEffect, useMemo, useState, type FormEvent} from 'react';
 import {AdminLoginModal} from './components/AdminLoginModal';
 import {AdminPanelModal} from './components/AdminPanelModal';
+import {BrandLogo} from './components/BrandLogo';
 import {ExternalVideoPlayer} from './components/ExternalVideoPlayer';
 import {GalleryGrid} from './components/GalleryGrid';
 import {LightboxModal} from './components/LightboxModal';
@@ -93,6 +94,15 @@ export default function App() {
       // Ignore storage errors
     }
   }, [adminUser]);
+
+  useEffect(() => {
+    const cleanLogo = siteConfig.logoUrl?.trim();
+    if (!cleanLogo) return;
+    const iconLink = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (iconLink) {
+      iconLink.href = cleanLogo;
+    }
+  }, [siteConfig.logoUrl]);
 
   const visibleGalleryItems = useMemo(
     () =>
@@ -205,12 +215,17 @@ export default function App() {
       {/* Strict 3-Zone Top Bar */}
       <header className="border-b border-white/10 bg-[#07090E] text-white">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-8 px-6 lg:px-10">
-          {/* Zone 1: Single-line Wordmark */}
+          {/* Zone 1: Single-line Wordmark + Official Logo */}
           <a
             href="#video"
-            className="font-display text-lg font-semibold tracking-tight text-white whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B82F6]"
+            className="inline-flex items-center gap-3 font-display text-lg font-semibold tracking-tight text-white whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B82F6]"
           >
-            {siteConfig.brandName}
+            <BrandLogo
+              src={siteConfig.logoUrl}
+              alt={`Logo oficial de ${siteConfig.brandName}`}
+              sizeClass="h-9 w-9"
+            />
+            <span>{siteConfig.brandName}</span>
           </a>
 
           {/* Zone 2: 4 Concise Single-Line Links */}
@@ -635,6 +650,11 @@ export default function App() {
       <footer className="bg-[#07090E] text-white">
         <div className="mx-auto flex max-w-7xl flex-col justify-between gap-6 px-6 py-10 sm:flex-row sm:items-center lg:px-10">
           <div className="flex flex-wrap items-center gap-3 text-sm">
+            <BrandLogo
+              src={siteConfig.logoUrl}
+              alt={`Logo oficial de ${siteConfig.brandName}`}
+              sizeClass="h-8 w-8"
+            />
             <span className="font-display font-semibold tracking-tight text-white">
               {siteConfig.brandName}
             </span>
@@ -677,6 +697,8 @@ export default function App() {
       {/* Admin Login Modal */}
       <AdminLoginModal
         isOpen={isLoginModalOpen}
+        logoUrl={siteConfig.logoUrl}
+        brandName={siteConfig.brandName}
         onClose={() => setIsLoginModalOpen(false)}
         onSuccess={handleLoginSuccess}
       />
