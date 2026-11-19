@@ -37,7 +37,9 @@ export function ExternalVideoPlayer({
               key={parsed.embedUrl}
               src={parsed.embedUrl}
               title={videoTitle}
-              className="h-full w-full border-0"
+              className={`h-full w-full border-0 ${
+                parsed.platform === 'instagram' ? 'bg-white' : ''
+              }`}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               referrerPolicy="strict-origin-when-cross-origin"
               allowFullScreen

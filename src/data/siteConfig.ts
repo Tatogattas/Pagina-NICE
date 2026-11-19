@@ -68,7 +68,7 @@ export const DEFAULT_SITE_CONFIG: SiteContentConfig = {
   galleryKicker: 'Archivo visual NICE',
   galleryTitle: 'Ejercicios paleo y readaptación clínica',
   galleryDescription:
-    'Explora nuestra galería de movimientos funcionales, control postural y rehabilitación servida mediante enlaces externos. Haz clic en cualquier lámina para ampliarla.',
+    'Explora nuestra galería de imágenes y videos de movimientos funcionales, control postural y rehabilitación servida mediante enlaces externos. Haz clic en cualquier tarjeta para ampliarla o reproducirla.',
   galleryItems: DEFAULT_GALLERY_ITEMS,
   approachKicker: 'Metodología NICE',
   approachTitle: 'Movimiento natural respaldado por criterio clínico',

@@ -303,7 +303,7 @@ export default function App() {
                 className="inline-flex items-center gap-1 font-medium text-white transition-colors hover:text-[#60A5FA]"
               >
                 <Pencil className="h-3 w-3" aria-hidden="true" />
-                <span>Imágenes</span>
+                <span>Fotos y videos</span>
               </button>
               <button
                 type="button"

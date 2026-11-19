@@ -4,13 +4,24 @@ export type GalleryCategory =
   | 'Fuerza funcional'
   | 'Rehabilitación';
 
+export type GalleryMediaType = 'image' | 'video';
+
+export type VideoPlatform =
+  | 'youtube'
+  | 'facebook'
+  | 'instagram'
+  | 'vimeo'
+  | 'direct';
+
 export interface GalleryItem {
   id: string;
+  mediaType?: GalleryMediaType;
   title: string;
   category: Exclude<GalleryCategory, 'Todas'>;
   location: string;
   year: string;
   imageUrl: string;
+  videoUrl?: string;
   alt: string;
   aspectHint: string;
   isCustom?: boolean;
@@ -26,9 +37,13 @@ export interface VideoSourcePreset {
 
 export interface ParsedVideoSource {
   kind: 'iframe' | 'video';
+  platform: VideoPlatform;
+  platformLabel: string;
   embedUrl: string;
   hostLabel: string;
   originalUrl: string;
+  isVertical?: boolean;
+  thumbnailUrl?: string;
 }
 
 export const DEFAULT_VIDEO_PRESETS: VideoSourcePreset[] = [
@@ -51,6 +66,7 @@ export const DEFAULT_VIDEO_PRESETS: VideoSourcePreset[] = [
 export const DEFAULT_GALLERY_ITEMS: GalleryItem[] = [
   {
     id: 'sentadilla-unilateral-primal',
+    mediaType: 'image',
     title: 'Sentadilla unilateral y control de tobillo',
     category: 'Movilidad primal',
     location: 'Sala funcional NICE',
@@ -61,7 +77,20 @@ export const DEFAULT_GALLERY_ITEMS: GalleryItem[] = [
     aspectHint: '16:10',
   },
   {
+    id: 'video-patrones-paleo-diarios',
+    mediaType: 'video',
+    title: 'Patrones paleo diarios · Sentadilla profunda y columna',
+    category: 'Movilidad primal',
+    location: 'YouTube · Sesión guiada',
+    year: 'Video',
+    imageUrl: 'https://i.ytimg.com/vi/PKHMIt2vLgg/hqdefault.jpg',
+    videoUrl: 'https://www.youtube.com/watch?v=PKHMIt2vLgg',
+    alt: 'Video de ejercicios paleo diarios para movilidad de cadera y columna',
+    aspectHint: '16:9',
+  },
+  {
     id: 'kettlebell-bent-press',
+    mediaType: 'image',
     title: 'Press inclinado con kettlebell y rotación torácica',
     category: 'Fuerza funcional',
     location: 'Zona de carga libre',
@@ -73,6 +102,7 @@ export const DEFAULT_GALLERY_ITEMS: GalleryItem[] = [
   },
   {
     id: 'plancha-isometrica-core',
+    mediaType: 'image',
     title: 'Plancha isométrica y respiración diafragmática',
     category: 'Movilidad primal',
     location: 'Estudio de suelo',
@@ -84,6 +114,7 @@ export const DEFAULT_GALLERY_ITEMS: GalleryItem[] = [
   },
   {
     id: 'rehabilitacion-clinica-guiada',
+    mediaType: 'image',
     title: 'Readaptación funcional asistida tras lesión',
     category: 'Rehabilitación',
     location: 'Área clínica NICE',
@@ -95,6 +126,7 @@ export const DEFAULT_GALLERY_ITEMS: GalleryItem[] = [
   },
   {
     id: 'evaluacion-articular-clinica',
+    mediaType: 'image',
     title: 'Valoración articular y rango de movimiento',
     category: 'Rehabilitación',
     location: 'Consultorio biomecánico',
@@ -106,6 +138,7 @@ export const DEFAULT_GALLERY_ITEMS: GalleryItem[] = [
   },
   {
     id: 'calistenia-barras-exterior',
+    mediaType: 'image',
     title: 'Tracción en barra y suspensión al aire libre',
     category: 'Fuerza funcional',
     location: 'Circuito exterior',
@@ -117,6 +150,7 @@ export const DEFAULT_GALLERY_ITEMS: GalleryItem[] = [
   },
   {
     id: 'kettlebell-potencia-cadera',
+    mediaType: 'image',
     title: 'Bisagra de cadera y carga con kettlebell',
     category: 'Fuerza funcional',
     location: 'Sala funcional NICE',
@@ -128,6 +162,7 @@ export const DEFAULT_GALLERY_ITEMS: GalleryItem[] = [
   },
   {
     id: 'desplazamiento-lumbopelvico',
+    mediaType: 'image',
     title: 'Control lumbo-pélvico y extensión dinámica',
     category: 'Movilidad primal',
     location: 'Estudio de suelo',
@@ -166,52 +201,138 @@ export function parseExternalVideoUrl(rawUrl: string): ParsedVideoSource | null 
   try {
     const url = new URL(trimmed);
     const host = url.hostname.toLowerCase();
+    const path = url.pathname;
 
+    // 1. YouTube (watch, shorts, live, embed, youtu.be)
     if (host.includes('youtube.com') || host.includes('youtube-nocookie.com')) {
       let videoId = url.searchParams.get('v') || '';
-      if (!videoId && url.pathname.includes('/embed/')) {
-        videoId = url.pathname.split('/embed/')[1]?.split('/')[0] || '';
+      if (!videoId && path.includes('/embed/')) {
+        videoId = path.split('/embed/')[1]?.split('/')[0] || '';
       }
-      if (!videoId && url.pathname.includes('/shorts/')) {
-        videoId = url.pathname.split('/shorts/')[1]?.split('/')[0] || '';
+      if (!videoId && path.includes('/shorts/')) {
+        videoId = path.split('/shorts/')[1]?.split('/')[0] || '';
+      }
+      if (!videoId && path.includes('/live/')) {
+        videoId = path.split('/live/')[1]?.split('/')[0] || '';
       }
       if (videoId) {
+        const cleanId = encodeURIComponent(videoId);
         return {
           kind: 'iframe',
-          embedUrl: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?rel=0&modestbranding=1`,
+          platform: 'youtube',
+          platformLabel: 'YouTube',
+          embedUrl: `https://www.youtube-nocookie.com/embed/${cleanId}?rel=0&modestbranding=1`,
           hostLabel: 'youtube-nocookie.com',
           originalUrl: trimmed,
+          isVertical: path.includes('/shorts/'),
+          thumbnailUrl: `https://i.ytimg.com/vi/${cleanId}/hqdefault.jpg`,
         };
       }
+      return null;
     }
 
-    if (host === 'youtu.be') {
-      const videoId = url.pathname.replace(/^\//, '').split('/')[0];
+    if (host === 'youtu.be' || host.endsWith('.youtu.be')) {
+      const videoId = path.replace(/^\//, '').split('/')[0];
       if (videoId) {
+        const cleanId = encodeURIComponent(videoId);
         return {
           kind: 'iframe',
-          embedUrl: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?rel=0&modestbranding=1`,
+          platform: 'youtube',
+          platformLabel: 'YouTube',
+          embedUrl: `https://www.youtube-nocookie.com/embed/${cleanId}?rel=0&modestbranding=1`,
           hostLabel: 'youtube-nocookie.com',
           originalUrl: trimmed,
+          thumbnailUrl: `https://i.ytimg.com/vi/${cleanId}/hqdefault.jpg`,
         };
       }
+      return null;
     }
 
+    // 2. Facebook (watch, videos, reel, share/v, share/r, fb.watch, plugins/video.php)
+    if (
+      host === 'fb.watch' ||
+      host.endsWith('.fb.watch') ||
+      host === 'facebook.com' ||
+      host.endsWith('.facebook.com')
+    ) {
+      if (path.includes('/plugins/video.php') && url.searchParams.has('href')) {
+        const hrefTarget = url.searchParams.get('href') || trimmed;
+        return {
+          kind: 'iframe',
+          platform: 'facebook',
+          platformLabel: 'Facebook',
+          embedUrl: trimmed,
+          hostLabel: 'facebook.com',
+          originalUrl: hrefTarget,
+          isVertical: hrefTarget.includes('/reel/'),
+        };
+      }
+
+      const isFbVideoLink =
+        host.includes('fb.watch') ||
+        url.searchParams.has('v') ||
+        /\/(watch|videos|reel|share\/[vr]|video\.php)\b/i.test(path);
+
+      if (isFbVideoLink) {
+        return {
+          kind: 'iframe',
+          platform: 'facebook',
+          platformLabel: 'Facebook',
+          embedUrl: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(trimmed)}&show_text=false&width=734`,
+          hostLabel: 'facebook.com',
+          originalUrl: trimmed,
+          isVertical: /\/(reel|share\/r)\b/i.test(path),
+        };
+      }
+      return null;
+    }
+
+    // 3. Instagram (p, reel, reels, tv)
+    if (
+      host === 'instagram.com' ||
+      host.endsWith('.instagram.com') ||
+      host === 'instagr.am'
+    ) {
+      const igMatch = path.match(/\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i);
+      if (igMatch) {
+        const rawKind = igMatch[1].toLowerCase();
+        const kindSegment = rawKind === 'reels' ? 'reel' : rawKind;
+        const shortcode = encodeURIComponent(igMatch[2]);
+        return {
+          kind: 'iframe',
+          platform: 'instagram',
+          platformLabel: 'Instagram',
+          embedUrl: `https://www.instagram.com/${kindSegment}/${shortcode}/embed/`,
+          hostLabel: 'instagram.com',
+          originalUrl: trimmed,
+          isVertical: true,
+        };
+      }
+      return null;
+    }
+
+    // 4. Vimeo
     if (host.includes('vimeo.com')) {
-      const segments = url.pathname.split('/').filter(Boolean);
+      const segments = path.split('/').filter(Boolean);
       const vimeoId = segments[segments.length - 1];
       if (vimeoId && /^\d+$/.test(vimeoId)) {
         return {
           kind: 'iframe',
+          platform: 'vimeo',
+          platformLabel: 'Vimeo',
           embedUrl: `https://player.vimeo.com/video/${vimeoId}?title=0&byline=0&portrait=0`,
           hostLabel: 'player.vimeo.com',
           originalUrl: trimmed,
         };
       }
+      return null;
     }
 
+    // 5. Direct MP4/WebM/OGG video links
     return {
       kind: 'video',
+      platform: 'direct',
+      platformLabel: 'Video directo',
       embedUrl: trimmed,
       hostLabel: extractDomainLabel(trimmed),
       originalUrl: trimmed,
@@ -219,4 +340,20 @@ export function parseExternalVideoUrl(rawUrl: string): ParsedVideoSource | null 
   } catch {
     return null;
   }
+}
+
+export function isVideoGalleryItem(item: GalleryItem): boolean {
+  return item.mediaType === 'video' || Boolean(item.videoUrl?.trim());
+}
+
+export function getGalleryItemThumbnail(item: GalleryItem): string {
+  const manual = item.imageUrl?.trim();
+  if (manual) return manual;
+  if (item.videoUrl) {
+    const parsed = parseExternalVideoUrl(item.videoUrl);
+    if (parsed?.thumbnailUrl) {
+      return parsed.thumbnailUrl;
+    }
+  }
+  return '';
 }

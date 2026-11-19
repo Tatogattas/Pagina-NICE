@@ -49,17 +49,26 @@ export function sanitizeSiteConfig(
     galleryDescription: clampStr(raw.galleryDescription, 600),
     galleryItems: (Array.isArray(raw.galleryItems) ? raw.galleryItems : [])
       .slice(0, 50)
-      .map((item, idx) => ({
-        id: clampStr(item.id || `img-${idx + 1}`, 100),
-        title: clampStr(item.title, 160),
-        category: item.category,
-        location: clampStr(item.location, 120),
-        year: clampStr(item.year, 16),
-        imageUrl: clampStr(item.imageUrl, 1000),
-        alt: clampStr(item.alt, 300),
-        aspectHint: clampStr(item.aspectHint || '4:3', 20),
-        ...(item.isCustom ? {isCustom: true} : {}),
-      })),
+      .map((item, idx) => {
+        const cleanVideoUrl = clampStr(item.videoUrl || '', 1000);
+        const mediaType =
+          item.mediaType === 'video' || Boolean(cleanVideoUrl)
+            ? 'video'
+            : 'image';
+        return {
+          id: clampStr(item.id || `media-${idx + 1}`, 100),
+          mediaType,
+          title: clampStr(item.title, 160),
+          category: item.category,
+          location: clampStr(item.location, 120),
+          year: clampStr(item.year, 16),
+          imageUrl: clampStr(item.imageUrl || '', 1000),
+          ...(cleanVideoUrl ? {videoUrl: cleanVideoUrl} : {}),
+          alt: clampStr(item.alt, 300),
+          aspectHint: clampStr(item.aspectHint || '4:3', 20),
+          ...(item.isCustom ? {isCustom: true} : {}),
+        };
+      }),
     approachKicker: clampStr(raw.approachKicker, 120),
     approachTitle: clampStr(raw.approachTitle, 200, DEFAULT_SITE_CONFIG.approachTitle) || DEFAULT_SITE_CONFIG.approachTitle,
     approachDescription: clampStr(raw.approachDescription, 600),

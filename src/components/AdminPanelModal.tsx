@@ -6,19 +6,25 @@ import {
   Check,
   Cloud,
   Download,
+  Film,
+  Image as ImageIcon,
   LogOut,
   Pencil,
+  Play,
   Plus,
   RotateCcw,
   Trash2,
   X,
 } from 'lucide-react';
-import {useEffect, useState, type FormEvent} from 'react';
+import {useEffect, useMemo, useState, type FormEvent} from 'react';
 import {
+  getGalleryItemThumbnail,
   isValidHttpsUrl,
+  isVideoGalleryItem,
   parseExternalVideoUrl,
   type GalleryCategory,
   type GalleryItem,
+  type GalleryMediaType,
 } from '../data/externalMedia';
 import type {SiteContentConfig} from '../data/siteConfig';
 import {auth, googleProvider} from '../firebase';
@@ -61,13 +67,21 @@ export function AdminPanelModal({
   const [selectedItemId, setSelectedItemId] = useState<string | null>(
     editingGalleryItemId
   );
+  const [itemMediaType, setItemMediaType] =
+    useState<GalleryMediaType>('image');
   const [imgUrl, setImgUrl] = useState('');
+  const [itemVideoUrl, setItemVideoUrl] = useState('');
   const [imgTitle, setImgTitle] = useState('');
   const [imgCategory, setImgCategory] =
     useState<Exclude<GalleryCategory, 'Todas'>>('Movilidad primal');
   const [imgLocation, setImgLocation] = useState('');
   const [imgYear, setImgYear] = useState('2026');
   const [imgAlt, setImgAlt] = useState('');
+
+  const parsedGalleryVideo = useMemo(() => {
+    if (itemMediaType !== 'video' || !itemVideoUrl.trim()) return null;
+    return parseExternalVideoUrl(itemVideoUrl);
+  }, [itemMediaType, itemVideoUrl]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -81,8 +95,11 @@ export function AdminPanelModal({
         (g) => g.id === editingGalleryItemId
       );
       if (target) {
+        const isVideo = isVideoGalleryItem(target);
         setSelectedItemId(target.id);
-        setImgUrl(target.imageUrl);
+        setItemMediaType(isVideo ? 'video' : 'image');
+        setImgUrl(target.imageUrl || '');
+        setItemVideoUrl(target.videoUrl || '');
         setImgTitle(target.title);
         setImgCategory(target.category);
         setImgLocation(target.location);
@@ -107,7 +124,9 @@ export function AdminPanelModal({
 
   function resetItemForm() {
     setSelectedItemId(null);
+    setItemMediaType('image');
     setImgUrl('');
+    setItemVideoUrl('');
     setImgTitle('');
     setImgCategory('Movilidad primal');
     setImgLocation('');
@@ -184,7 +203,7 @@ export function AdminPanelModal({
     if (!parsedVideo) {
       setActiveTab('hero');
       setErrorMsg(
-        'El enlace del video debe ser una URL válida (YouTube, Vimeo o archivo MP4/WebM con https://).'
+        'El enlace del video debe ser una URL válida de YouTube, Facebook, Instagram, Vimeo o archivo MP4/WebM (https://).'
       );
       return;
     }
@@ -198,13 +217,39 @@ export function AdminPanelModal({
     e.preventDefault();
     setErrorMsg(null);
 
-    if (!isValidHttpsUrl(imgUrl)) {
-      setErrorMsg('Ingresa una URL externa válida (https://...) para la imagen.');
+    if (!imgTitle.trim()) {
+      setErrorMsg('Escribe un título para el ejercicio o elemento.');
       return;
     }
-    if (!imgTitle.trim()) {
-      setErrorMsg('Escribe un título para la imagen.');
-      return;
+
+    let finalImageUrl = imgUrl.trim();
+    let finalVideoUrl: string | undefined;
+
+    if (itemMediaType === 'video') {
+      const parsed = parseExternalVideoUrl(itemVideoUrl);
+      if (!parsed) {
+        setErrorMsg(
+          'Ingresa un enlace válido de video o reel de YouTube, Facebook, Instagram, Vimeo o MP4/WebM (https://).'
+        );
+        return;
+      }
+      if (finalImageUrl && !isValidHttpsUrl(finalImageUrl)) {
+        setErrorMsg(
+          'Si agregas una imagen de portada opcional, debe ser una URL válida (https://...).'
+        );
+        return;
+      }
+      if (!finalImageUrl && parsed.thumbnailUrl) {
+        finalImageUrl = parsed.thumbnailUrl;
+      }
+      finalVideoUrl = itemVideoUrl.trim();
+    } else {
+      if (!isValidHttpsUrl(finalImageUrl)) {
+        setErrorMsg(
+          'Ingresa una URL externa válida (https://...) para la imagen.'
+        );
+        return;
+      }
     }
 
     let nextItems: GalleryItem[];
@@ -213,25 +258,41 @@ export function AdminPanelModal({
         item.id === selectedItemId
           ? {
               ...item,
-              imageUrl: imgUrl.trim(),
+              mediaType: itemMediaType,
+              imageUrl: finalImageUrl,
+              ...(finalVideoUrl ? {videoUrl: finalVideoUrl} : {videoUrl: ''}),
               title: imgTitle.trim(),
               category: imgCategory,
-              location: imgLocation.trim() || 'Enlace externo',
-              year: imgYear.trim() || String(new Date().getFullYear()),
+              location:
+                imgLocation.trim() ||
+                (itemMediaType === 'video' ? 'Enlace de video' : 'Enlace externo'),
+              year:
+                imgYear.trim() ||
+                (itemMediaType === 'video'
+                  ? 'Video'
+                  : String(new Date().getFullYear())),
               alt: imgAlt.trim() || imgTitle.trim(),
             }
           : item
       );
     } else {
       const newItem: GalleryItem = {
-        id: `img-${Date.now()}`,
-        imageUrl: imgUrl.trim(),
+        id: `${itemMediaType === 'video' ? 'vid' : 'img'}-${Date.now()}`,
+        mediaType: itemMediaType,
+        imageUrl: finalImageUrl,
+        ...(finalVideoUrl ? {videoUrl: finalVideoUrl} : {}),
         title: imgTitle.trim(),
         category: imgCategory,
-        location: imgLocation.trim() || 'Enlace externo',
-        year: imgYear.trim() || String(new Date().getFullYear()),
+        location:
+          imgLocation.trim() ||
+          (itemMediaType === 'video' ? 'Enlace de video' : 'Enlace externo'),
+        year:
+          imgYear.trim() ||
+          (itemMediaType === 'video'
+            ? 'Video'
+            : String(new Date().getFullYear())),
         alt: imgAlt.trim() || imgTitle.trim(),
-        aspectHint: '4:3',
+        aspectHint: itemMediaType === 'video' ? '16:9' : '4:3',
         isCustom: true,
       };
       nextItems = [newItem, ...draft.galleryItems];
@@ -241,8 +302,10 @@ export function AdminPanelModal({
     const ok = await persistChanges(
       updated,
       selectedItemId
-        ? 'Imagen actualizada y publicada para todos.'
-        : 'Imagen añadida y publicada para todos.'
+        ? 'Elemento actualizado y publicado para todos.'
+        : itemMediaType === 'video'
+          ? 'Video añadido y publicado para todos.'
+          : 'Imagen añadida y publicada para todos.'
     );
     if (ok) {
       setDraft(updated);
@@ -251,8 +314,11 @@ export function AdminPanelModal({
   };
 
   const handleStartEditItem = (item: GalleryItem) => {
+    const isVideo = isVideoGalleryItem(item);
     setSelectedItemId(item.id);
-    setImgUrl(item.imageUrl);
+    setItemMediaType(isVideo ? 'video' : 'image');
+    setImgUrl(item.imageUrl || '');
+    setItemVideoUrl(item.videoUrl || '');
     setImgTitle(item.title);
     setImgCategory(item.category);
     setImgLocation(item.location);
@@ -409,7 +475,7 @@ export function AdminPanelModal({
             {(
               [
                 {id: 'hero', label: 'Portada y Video'},
-                {id: 'gallery', label: 'Galería de Imágenes'},
+                {id: 'gallery', label: 'Galería (Fotos y Videos)'},
                 {id: 'sections', label: 'Enfoque, Contacto y Pie'},
               ] as const
             ).map((tab) => (
@@ -552,7 +618,7 @@ export function AdminPanelModal({
                 <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className="block text-xs font-semibold text-[#07090E]">
-                      URL del video (YouTube, Vimeo o MP4/WebM)
+                      URL del video (YouTube, Facebook, Instagram, Vimeo o MP4)
                     </label>
                     <input
                       type="url"
@@ -690,39 +756,135 @@ export function AdminPanelModal({
                 onSubmit={handleSaveGalleryItem}
                 className="space-y-4 rounded-xl border border-slate-200 p-5"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold text-[#07090E]">
                     {selectedItemId
-                      ? 'Editar imagen seleccionada'
-                      : 'Añadir nueva imagen mediante enlace externo'}
+                      ? 'Editar elemento seleccionado'
+                      : 'Añadir foto o video mediante enlace externo'}
                   </h3>
-                  {selectedItemId && (
-                    <button
-                      type="button"
-                      onClick={resetItemForm}
-                      className="text-xs font-medium text-slate-500 hover:text-[#07090E]"
+
+                  <div className="flex items-center gap-3">
+                    <div
+                      role="group"
+                      aria-label="Tipo de elemento"
+                      className="flex items-center gap-1 rounded-lg bg-slate-100 p-1"
                     >
-                      Cancelar edición
-                    </button>
-                  )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setItemMediaType('image');
+                          setErrorMsg(null);
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
+                          itemMediaType === 'image'
+                            ? 'bg-[#07090E] text-white'
+                            : 'text-slate-600 hover:text-[#07090E]'
+                        }`}
+                      >
+                        <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>Imagen</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setItemMediaType('video');
+                          if (imgYear === String(new Date().getFullYear())) {
+                            setImgYear('Video');
+                          }
+                          setErrorMsg(null);
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
+                          itemMediaType === 'video'
+                            ? 'bg-[#2563EB] text-white'
+                            : 'text-slate-600 hover:text-[#07090E]'
+                        }`}
+                      >
+                        <Film className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>Video (YT / FB / IG)</span>
+                      </button>
+                    </div>
+
+                    {selectedItemId && (
+                      <button
+                        type="button"
+                        onClick={resetItemForm}
+                        className="text-xs font-medium text-slate-500 hover:text-[#07090E]"
+                      >
+                        Cancelar edición
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="block text-xs font-semibold text-[#07090E]">
-                      URL externa de la imagen (HTTPS)
-                    </label>
-                    <input
-                      type="url"
-                      required
-                      maxLength={1000}
-                      value={imgUrl}
-                      onChange={(e) => setImgUrl(e.target.value)}
-                      placeholder="https://..."
-                      className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
-                    />
+                {itemMediaType === 'video' ? (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-xs font-semibold text-[#07090E]">
+                        URL del video o reel (YouTube, Facebook, Instagram, Vimeo o MP4)
+                      </label>
+                      <input
+                        type="url"
+                        required
+                        maxLength={1000}
+                        value={itemVideoUrl}
+                        onChange={(e) => setItemVideoUrl(e.target.value)}
+                        placeholder="https://www.instagram.com/reel/... o facebook.com/... o youtube.com/..."
+                        className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                      />
+                      {itemVideoUrl.trim() && (
+                        <p
+                          className={`mt-1.5 text-xs ${
+                            parsedGalleryVideo
+                              ? 'font-medium text-[#2563EB]'
+                              : 'text-red-600'
+                          }`}
+                        >
+                          {parsedGalleryVideo
+                            ? `Plataforma detectada: ${parsedGalleryVideo.platformLabel} (reproductor listo)`
+                            : 'Enlace no reconocido. Para Instagram usa un Reel o publicación (/reel/ o /p/); para Facebook usa /watch, /videos o /reel.'}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-[#07090E]">
+                        URL de portada o miniatura (opcional)
+                      </label>
+                      <input
+                        type="url"
+                        maxLength={1000}
+                        value={imgUrl}
+                        onChange={(e) => setImgUrl(e.target.value)}
+                        placeholder="https://... (opcional; YouTube la genera sola)"
+                        className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                      />
+                      <p className="mt-1.5 text-xs text-slate-500">
+                        Si se deja vacío en Facebook o Instagram, se muestra una
+                        tarjeta elegante de video con botón de reproducción.
+                      </p>
+                    </div>
                   </div>
-                  <div>
+                ) : null}
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {itemMediaType === 'image' && (
+                    <div>
+                      <label className="block text-xs font-semibold text-[#07090E]">
+                        URL externa de la imagen (HTTPS)
+                      </label>
+                      <input
+                        type="url"
+                        required
+                        maxLength={1000}
+                        value={imgUrl}
+                        onChange={(e) => setImgUrl(e.target.value)}
+                        placeholder="https://..."
+                        className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                      />
+                    </div>
+                  )}
+
+                  <div className={itemMediaType === 'video' ? 'sm:col-span-2' : ''}>
                     <label className="block text-xs font-semibold text-[#07090E]">
                       Título del ejercicio o práctica
                     </label>
@@ -772,7 +934,7 @@ export function AdminPanelModal({
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-[#07090E]">
-                      Año
+                      Nivel / Año
                     </label>
                     <input
                       type="text"
@@ -811,7 +973,9 @@ export function AdminPanelModal({
                         ? 'Publicando...'
                         : selectedItemId
                           ? 'Actualizar y publicar'
-                          : 'Añadir y publicar'}
+                          : itemMediaType === 'video'
+                            ? 'Añadir video y publicar'
+                            : 'Añadir imagen y publicar'}
                     </span>
                   </button>
                 </div>
@@ -819,27 +983,52 @@ export function AdminPanelModal({
 
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold text-[#07090E]">
-                  Imágenes actuales ({draft.galleryItems.length})
+                  Elementos actuales en galería ({draft.galleryItems.length})
                 </h3>
                 <div className="divide-y divide-slate-200 rounded-xl border border-slate-200">
-                  {draft.galleryItems.map((item, idx) => (
+                  {draft.galleryItems.map((item, idx) => {
+                    const isVideo = isVideoGalleryItem(item);
+                    const thumb = isVideo
+                      ? getGalleryItemThumbnail(item)
+                      : item.imageUrl;
+                    const parsedVid =
+                      isVideo && item.videoUrl
+                        ? parseExternalVideoUrl(item.videoUrl)
+                        : null;
+                    return (
                     <div
                       key={item.id}
                       className="flex flex-wrap items-center justify-between gap-4 p-3 sm:flex-nowrap"
                     >
                       <div className="flex min-w-0 items-center gap-3">
-                        <img
-                          src={item.imageUrl}
-                          alt={item.title}
-                          referrerPolicy="no-referrer"
-                          className="h-12 w-16 shrink-0 rounded-md bg-slate-900 object-cover"
-                        />
+                        {thumb ? (
+                          <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded-md bg-slate-900">
+                            <img
+                              src={thumb}
+                              alt={item.title}
+                              referrerPolicy="no-referrer"
+                              className="h-full w-full object-cover"
+                            />
+                            {isVideo && (
+                              <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-white">
+                                <Play className="h-4 w-4 fill-current" aria-hidden="true" />
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex h-12 w-16 shrink-0 items-center justify-center rounded-md bg-[#07090E] text-[#60A5FA]">
+                            <Play className="h-4 w-4 fill-current" aria-hidden="true" />
+                          </div>
+                        )}
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold text-[#07090E]">
                             {item.title}
                           </p>
                           <p className="truncate text-xs text-slate-500">
-                            {item.category} · {item.location} · {item.year}
+                            {isVideo
+                              ? `Video (${parsedVid?.platformLabel ?? 'Externo'})`
+                              : 'Imagen'}{' '}
+                            · {item.category} · {item.location} · {item.year}
                           </p>
                         </div>
                       </div>
@@ -884,7 +1073,8 @@ export function AdminPanelModal({
                         </button>
                       </div>
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               </div>
             </div>
