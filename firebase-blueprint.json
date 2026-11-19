@@ -11,6 +11,11 @@
           "maxLength": 1000,
           "pattern": "^$|^https?://.+"
         },
+        "whatsappWebhookUrl": {
+          "type": "string",
+          "maxLength": 1000,
+          "pattern": "^$|^https://.+"
+        },
         "heroKicker": { "type": "string", "maxLength": 120 },
         "heroTitle": { "type": "string", "minLength": 1, "maxLength": 200 },
         "heroDescription": { "type": "string", "maxLength": 600 },
@@ -79,6 +84,56 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "email", "createdAt"]
+    },
+    "ContactRouting": {
+      "title": "ContactRouting",
+      "description": "Round-robin turn counter for distributing incoming WhatsApp inquiries across advisors.",
+      "type": "object",
+      "properties": {
+        "turnCount": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["turnCount", "updatedAt"]
+    },
+    "ContactInquiry": {
+      "title": "ContactInquiry",
+      "description": "Submitted public contact form inquiry routed from +503 60431208 to a WhatsApp turn and linked admin email.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "phone": { "type": "string", "minLength": 6, "maxLength": 40 },
+        "message": { "type": "string", "minLength": 10, "maxLength": 2000 },
+        "senderWhatsapp": {
+          "type": "string",
+          "enum": ["+503 60431208"]
+        },
+        "assignedWhatsapp": {
+          "type": "string",
+          "enum": ["+503 61631237", "+503 79007071", "+503 75437670"]
+        },
+        "turnSlot": { "type": "integer" },
+        "recipientEmail": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "emailStatus": {
+          "type": "string",
+          "enum": ["pending", "sent", "activation_required", "fallback"]
+        },
+        "dispatched": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "name",
+        "email",
+        "phone",
+        "message",
+        "senderWhatsapp",
+        "assignedWhatsapp",
+        "turnSlot",
+        "recipientEmail",
+        "emailStatus",
+        "dispatched",
+        "createdAt"
+      ]
     }
   },
   "firestore": {
@@ -89,6 +144,14 @@
     "/admins/{adminUid}": {
       "schema": { "$ref": "#/entities/AdminRecord" },
       "description": "Authorized administrator directory readable and writable only by administrators."
+    },
+    "/contactRouting/{routingId}": {
+      "schema": { "$ref": "#/entities/ContactRouting" },
+      "description": "Non-PII sequential turn counter ('roundRobin') for WhatsApp advisor rotation."
+    },
+    "/contactInquiries/{inquiryId}": {
+      "schema": { "$ref": "#/entities/ContactInquiry" },
+      "description": "Private visitor inquiries readable, updatable (dispatched state), and deletable strictly by administrators."
     }
   }
 }

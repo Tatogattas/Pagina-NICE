@@ -64,6 +64,7 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'brandName',
           'logoUrl',
+          'whatsappWebhookUrl',
           'heroKicker',
           'heroTitle',
           'heroDescription',
@@ -91,6 +92,7 @@ service cloud.firestore {
         ])
         && data.brandName is string && data.brandName.size() >= 1 && data.brandName.size() <= 80
         && (!('logoUrl' in data) || (data.logoUrl is string && data.logoUrl.size() <= 1000 && (data.logoUrl == '' || data.logoUrl.matches('^https?://.+'))))
+        && (!('whatsappWebhookUrl' in data) || (data.whatsappWebhookUrl is string && data.whatsappWebhookUrl.size() <= 1000 && (data.whatsappWebhookUrl == '' || data.whatsappWebhookUrl.matches('^https://.+'))))
         && data.heroKicker is string && data.heroKicker.size() <= 120
         && data.heroTitle is string && data.heroTitle.size() >= 1 && data.heroTitle.size() <= 200
         && data.heroDescription is string && data.heroDescription.size() <= 600
@@ -125,6 +127,56 @@ service cloud.firestore {
         && data.createdAt is timestamp && data.createdAt == request.time;
     }
 
+    function isValidRoundRobin(data) {
+      return data.keys().hasAll(['turnCount', 'updatedAt'])
+        && data.keys().hasOnly(['turnCount', 'updatedAt'])
+        && data.turnCount is int
+        && data.turnCount >= 1
+        && data.turnCount <= 1000000000
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidContactInquiry(data) {
+      return data.keys().hasAll([
+          'name',
+          'email',
+          'phone',
+          'message',
+          'senderWhatsapp',
+          'assignedWhatsapp',
+          'turnSlot',
+          'recipientEmail',
+          'emailStatus',
+          'dispatched',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'name',
+          'email',
+          'phone',
+          'message',
+          'senderWhatsapp',
+          'assignedWhatsapp',
+          'turnSlot',
+          'recipientEmail',
+          'emailStatus',
+          'dispatched',
+          'createdAt'
+        ])
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.phone is string && data.phone.size() >= 6 && data.phone.size() <= 40
+        && data.message is string && data.message.size() >= 10 && data.message.size() <= 2000
+        && data.senderWhatsapp == '+503 60431208'
+        && data.assignedWhatsapp in ['+503 61631237', '+503 79007071', '+503 75437670']
+        && data.turnSlot is int && data.turnSlot >= 1 && data.turnSlot <= 3
+        && data.recipientEmail is string && data.recipientEmail.size() >= 3 && data.recipientEmail.size() <= 160
+        && data.emailStatus in ['pending', 'sent', 'activation_required', 'fallback']
+        && data.dispatched is bool
+        && data.createdAt is timestamp && data.createdAt == request.time;
+    }
+
     match /siteContent/{contentId} {
       allow get: if isValidId(contentId) && contentId == 'main';
       allow list: if false;
@@ -139,6 +191,7 @@ service cloud.firestore {
         && incoming().diff(existing()).affectedKeys().hasOnly([
           'brandName',
           'logoUrl',
+          'whatsappWebhookUrl',
           'heroKicker',
           'heroTitle',
           'heroDescription',
@@ -175,6 +228,35 @@ service cloud.firestore {
         && isValidAdminRecord(incoming(), adminUid);
       allow update: if false;
       allow delete: if isValidId(adminUid) && isAdmin() && adminUid != request.auth.uid;
+    }
+
+    match /contactRouting/{routingId} {
+      allow get: if isValidId(routingId) && routingId == 'roundRobin';
+      allow list: if false;
+      allow create: if isValidId(routingId)
+        && routingId == 'roundRobin'
+        && isValidRoundRobin(incoming())
+        && incoming().turnCount == 1;
+      allow update: if isValidId(routingId)
+        && routingId == 'roundRobin'
+        && isValidRoundRobin(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['turnCount', 'updatedAt'])
+        && incoming().turnCount == existing().turnCount + 1;
+      allow delete: if isValidId(routingId) && routingId == 'roundRobin' && isAdmin();
+    }
+
+    match /contactInquiries/{inquiryId} {
+      allow get: if isValidId(inquiryId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(inquiryId)
+        && isValidContactInquiry(incoming())
+        && incoming().dispatched == false;
+      allow update: if isValidId(inquiryId)
+        && isAdmin()
+        && isValidContactInquiry(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['dispatched'])
+        && incoming().createdAt == existing().createdAt;
+      allow delete: if isValidId(inquiryId) && isAdmin();
     }
   }
 }

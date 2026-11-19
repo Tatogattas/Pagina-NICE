@@ -9,10 +9,12 @@ import {
   Film,
   Image as ImageIcon,
   LogOut,
+  MessageCircle,
   Pencil,
   Play,
   Plus,
   RotateCcw,
+  Send,
   Trash2,
   X,
 } from 'lucide-react';
@@ -31,9 +33,19 @@ import {
 } from '../data/externalMedia';
 import type {SiteContentConfig} from '../data/siteConfig';
 import {auth, googleProvider} from '../firebase';
+import {
+  buildOriginForwardWhatsappUrl,
+  deleteContactInquiry,
+  LINKED_ADMIN_EMAIL,
+  markInquiryDispatched,
+  ORIGIN_WHATSAPP,
+  subscribeToContactInquiries,
+  WHATSAPP_ADVISORS,
+  type StoredContactInquiry,
+} from '../services/contactRoutingService';
 import {BrandLogo} from './BrandLogo';
 
-type EditorTab = 'hero' | 'gallery' | 'sections';
+type EditorTab = 'hero' | 'gallery' | 'sections' | 'inquiries';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -66,6 +78,7 @@ export function AdminPanelModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
+  const [inquiries, setInquiries] = useState<StoredContactInquiry[]>([]);
 
   // Add / edit single gallery item form
   const [selectedItemId, setSelectedItemId] = useState<string | null>(
@@ -135,6 +148,17 @@ export function AdminPanelModal({
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
   }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen || !firebaseUser) {
+      setInquiries([]);
+      return;
+    }
+    const unsub = subscribeToContactInquiries((items) => {
+      setInquiries(items);
+    });
+    return () => unsub();
+  }, [isOpen, firebaseUser]);
 
   if (!isOpen) return null;
 
@@ -231,6 +255,24 @@ export function AdminPanelModal({
     await persistChanges(
       draft,
       'Publicado en la nube: todos los visitantes ya ven los cambios.'
+    );
+  };
+
+  const handleSaveWebhook = async (e: FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    const trimmed = (draft.whatsappWebhookUrl ?? '').trim();
+    if (trimmed && !/^https:\/\/.+/.test(trimmed)) {
+      setErrorMsg(
+        'La URL del webhook debe comenzar con https:// (o déjala vacía para desactivarla).'
+      );
+      return;
+    }
+    await persistChanges(
+      {...draft, whatsappWebhookUrl: trimmed},
+      trimmed
+        ? 'Webhook de WhatsApp conectado y publicado.'
+        : 'Webhook de WhatsApp desactivado.'
     );
   };
 
@@ -514,6 +556,10 @@ export function AdminPanelModal({
                 {id: 'hero', label: 'Portada y Video'},
                 {id: 'gallery', label: 'Galería (Fotos y Videos)'},
                 {id: 'sections', label: 'Enfoque, Contacto y Pie'},
+                {
+                  id: 'inquiries',
+                  label: `Consultas (${inquiries.length})`,
+                },
               ] as const
             ).map((tab) => (
               <button
@@ -1313,6 +1359,176 @@ export function AdminPanelModal({
                 </button>
               </div>
             </form>
+          )}
+
+          {activeTab === 'inquiries' && (
+            <div className="space-y-5">
+              <div className="rounded-xl border border-slate-200 bg-[#F4F7FC] p-4 text-xs text-slate-700">
+                <p className="font-semibold text-[#07090E]">
+                  Distribución por turnos desde {ORIGIN_WHATSAPP} y correo vinculado
+                </p>
+                <p className="mt-1 leading-relaxed">
+                  Cada consulta del formulario se envía a{' '}
+                  <strong className="text-[#07090E]">{LINKED_ADMIN_EMAIL}</strong>{' '}
+                  y se asigna rotativamente con origen{' '}
+                  <strong className="text-[#07090E]">{ORIGIN_WHATSAPP}</strong>{' '}
+                  hacia:{' '}
+                  {WHATSAPP_ADVISORS.map((a) => `Turno ${a.slot}: ${a.display}`).join(
+                    ' · '
+                  )}
+                  .
+                </p>
+              </div>
+
+              <form
+                onSubmit={(e) => void handleSaveWebhook(e)}
+                className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs font-semibold text-[#07090E]">
+                      Automatización directa desde {ORIGIN_WHATSAPP} (Webhook HTTPS opcional)
+                    </h3>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Si conectas Make, Zapier, n8n o WhatsApp Business Cloud API con el
+                      número {ORIGIN_WHATSAPP}, el sitio enviará un POST automático con el
+                      cliente y el turno asignado sin intervención manual.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="url"
+                    maxLength={1000}
+                    value={draft.whatsappWebhookUrl ?? ''}
+                    onChange={(e) =>
+                      setDraft({...draft, whatsappWebhookUrl: e.target.value})
+                    }
+                    placeholder="https://hook.us1.make.com/... (opcional)"
+                    className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs focus:border-[#2563EB] focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={saving || connectingGoogle}
+                    className="whitespace-nowrap rounded-lg bg-[#07090E] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#2563EB] disabled:opacity-60"
+                  >
+                    {saving ? 'Guardando...' : 'Guardar webhook'}
+                  </button>
+                </div>
+              </form>
+
+              {!firebaseUser ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600">
+                  <p>
+                    Conecta tu cuenta Google ({LINKED_ADMIN_EMAIL}) arriba para
+                    consultar las solicitudes recibidas en la nube.
+                  </p>
+                </div>
+              ) : inquiries.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600">
+                  Aún no hay consultas registradas en Firestore.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-200 rounded-xl border border-slate-200">
+                  {inquiries.map((inq) => {
+                    const cleanDigits = inq.phone.replace(/\D/g, '');
+                    const replyWa = cleanDigits
+                      ? `https://wa.me/${cleanDigits}?text=${encodeURIComponent(
+                          `Hola ${inq.name}, te saludamos de ${draft.brandName} respecto a tu consulta.`
+                        )}`
+                      : '';
+                    const originForwardWa = buildOriginForwardWhatsappUrl(
+                      inq,
+                      draft.brandName
+                    );
+                    return (
+                      <div
+                        key={inq.id}
+                        className="flex flex-col justify-between gap-3 p-4 sm:flex-row sm:items-start"
+                      >
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2 text-sm">
+                            <span className="font-semibold text-[#07090E]">
+                              {inq.name}
+                            </span>
+                            <span className="rounded bg-[#2563EB]/10 px-2 py-0.5 text-xs font-semibold text-[#2563EB]">
+                              {inq.senderWhatsapp || ORIGIN_WHATSAPP} → Turno {inq.turnSlot} · {inq.assignedWhatsapp}
+                            </span>
+                            <span
+                              className={`rounded px-2 py-0.5 text-xs font-semibold ${
+                                inq.dispatched
+                                  ? 'bg-emerald-50 text-emerald-700'
+                                  : 'bg-amber-50 text-amber-700'
+                              }`}
+                            >
+                              {inq.dispatched ? 'Reenviado' : 'Pendiente'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-600">
+                            Correo: {inq.email} · Teléfono: {inq.phone}
+                          </p>
+                          <p className="pt-1 text-sm text-[#07090E]">
+                            {inq.message}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            {new Date(inq.createdAtMs).toLocaleString('es-SV')}
+                          </p>
+                        </div>
+
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">
+                          <a
+                            href={originForwardWa}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => void markInquiryDispatched(inq.id, true)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-[#2563EB] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8]"
+                          >
+                            <Send className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>
+                              Reenviar a Turno {inq.turnSlot}
+                            </span>
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void markInquiryDispatched(inq.id, !inq.dispatched)
+                            }
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-[#07090E] transition-colors hover:border-[#2563EB] hover:text-[#2563EB]"
+                          >
+                            <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>
+                              {inq.dispatched ? 'Reenviado' : 'Marcar listo'}
+                            </span>
+                          </button>
+                          {replyWa && (
+                            <a
+                              href={replyWa}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-[#07090E] transition-colors hover:border-[#2563EB] hover:text-[#2563EB]"
+                            >
+                              <MessageCircle
+                                className="h-3.5 w-3.5"
+                                aria-hidden="true"
+                              />
+                              <span>Cliente</span>
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => void deleteContactInquiry(inq.id)}
+                            aria-label={`Eliminar consulta de ${inq.name}`}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

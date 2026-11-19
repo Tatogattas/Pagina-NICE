@@ -104,6 +104,11 @@ export function sanitizeSiteConfig(
     contactDescription: clampStr(raw.contactDescription, 600),
     contactEmail: clampStr(raw.contactEmail, 160),
     contactLocation: clampStr(raw.contactLocation, 160),
+    whatsappWebhookUrl: (() => {
+      const candidate = clampStr(raw.whatsappWebhookUrl ?? '', 1000);
+      if (!candidate) return '';
+      return /^https:\/\/.+/.test(candidate) ? candidate : '';
+    })(),
     footerTagline: clampStr(raw.footerTagline, 300),
     footerCopyright: clampStr(raw.footerCopyright, 120),
   };
@@ -128,6 +133,10 @@ export function subscribeToSiteContent(
           typeof data.logoUrl === 'string' && data.logoUrl.trim()
             ? data.logoUrl
             : DEFAULT_SITE_CONFIG.logoUrl,
+        whatsappWebhookUrl:
+          typeof data.whatsappWebhookUrl === 'string'
+            ? data.whatsappWebhookUrl
+            : '',
         heroPillars: Array.isArray(data.heroPillars)
           ? data.heroPillars
           : DEFAULT_SITE_CONFIG.heroPillars,

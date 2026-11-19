@@ -36,6 +36,7 @@ export interface SiteContentConfig {
   contactDescription: string;
   contactEmail: string;
   contactLocation: string;
+  whatsappWebhookUrl?: string;
   footerTagline: string;
   footerCopyright: string;
 }
@@ -105,6 +106,7 @@ export const DEFAULT_SITE_CONFIG: SiteContentConfig = {
     'Escríbenos para solicitar tu evaluación inicial de movimiento, horarios de sesiones paleo grupales o programas personalizados de rehabilitación.',
   contactEmail: 'clinica@academianice.example',
   contactLocation: 'Academia/Clínica NICE · Sede Central',
+  whatsappWebhookUrl: '',
   footerTagline:
     'Academia/Clínica NICE — Ejercicios paleo, movilidad natural y clínica funcional.',
   footerCopyright: '© 2026 Academia/Clínica NICE',

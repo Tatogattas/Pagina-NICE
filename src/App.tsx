@@ -4,6 +4,8 @@ import {
   CheckCircle2,
   Lock,
   LogOut,
+  Mail,
+  MessageCircle,
   Pencil,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -24,6 +26,11 @@ import {
   type SiteContentConfig,
 } from './data/siteConfig';
 import {auth, googleProvider} from './firebase';
+import {
+  LINKED_ADMIN_EMAIL,
+  submitContactInquiry,
+  type ContactDispatchResult,
+} from './services/contactRoutingService';
 import {
   publishSiteContent,
   subscribeToSiteContent,
@@ -55,7 +62,7 @@ export default function App() {
   // Admin panel modal state
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [adminPanelTab, setAdminPanelTab] = useState<
-    'hero' | 'gallery' | 'sections'
+    'hero' | 'gallery' | 'sections' | 'inquiries'
   >('hero');
   const [editingGalleryId, setEditingGalleryId] = useState<string | null>(null);
 
@@ -65,7 +72,9 @@ export default function App() {
   const [contactReference, setContactReference] = useState('');
   const [contactMessage, setContactMessage] = useState('');
   const [contactError, setContactError] = useState<string | null>(null);
-  const [contactSubmitted, setContactSubmitted] = useState(false);
+  const [contactSubmitting, setContactSubmitting] = useState(false);
+  const [contactDispatch, setContactDispatch] =
+    useState<ContactDispatchResult | null>(null);
 
   // Real-time subscription to global published site content in Firestore
   useEffect(() => {
@@ -115,7 +124,7 @@ export default function App() {
   );
 
   const openAdminEditor = (
-    tab: 'hero' | 'gallery' | 'sections',
+    tab: 'hero' | 'gallery' | 'sections' | 'inquiries',
     itemId: string | null = null
   ) => {
     if (!isAdmin) {
@@ -187,9 +196,10 @@ export default function App() {
     }
   };
 
-  const handleContactSubmit = (e: FormEvent) => {
+  const handleContactSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneDigits = contactReference.replace(/\D/g, '');
     if (!contactName.trim()) {
       setContactError('Por favor ingresa tu nombre.');
       return;
@@ -198,16 +208,39 @@ export default function App() {
       setContactError('Ingresa un correo electrónico válido.');
       return;
     }
+    if (phoneDigits.length < 6) {
+      setContactError(
+        'Ingresa un número telefónico válido para ponernos en contacto.'
+      );
+      return;
+    }
     if (contactMessage.trim().length < 10) {
       setContactError('El mensaje debe contener al menos 10 caracteres.');
       return;
     }
     setContactError(null);
-    setContactSubmitted(true);
-    setContactName('');
-    setContactEmail('');
-    setContactReference('');
-    setContactMessage('');
+    setContactSubmitting(true);
+    try {
+      const dispatch = await submitContactInquiry({
+        name: contactName,
+        email: contactEmail,
+        phone: contactReference,
+        message: contactMessage,
+        brandName: siteConfig.brandName,
+        whatsappWebhookUrl: siteConfig.whatsappWebhookUrl,
+      });
+      setContactDispatch(dispatch);
+      setContactName('');
+      setContactEmail('');
+      setContactReference('');
+      setContactMessage('');
+    } catch {
+      setContactError(
+        'Ocurrió un problema al procesar tu consulta. Inténtalo de nuevo.'
+      );
+    } finally {
+      setContactSubmitting(false);
+    }
   };
 
   return (
@@ -327,6 +360,14 @@ export default function App() {
               >
                 <Pencil className="h-3 w-3" aria-hidden="true" />
                 <span>Textos y contacto</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openAdminEditor('inquiries')}
+                className="inline-flex items-center gap-1 font-medium text-white transition-colors hover:text-[#60A5FA]"
+              >
+                <MessageCircle className="h-3 w-3" aria-hidden="true" />
+                <span>Consultas</span>
               </button>
               <button
                 type="button"
@@ -518,34 +559,66 @@ export default function App() {
             </div>
 
             <div className="lg:col-span-7">
-              {contactSubmitted ? (
+              {contactDispatch ? (
                 <div className="rounded-xl border border-slate-200 bg-[#F4F7FC] p-8">
                   <div className="flex items-start gap-3">
                     <CheckCircle2
                       className="mt-0.5 h-5 w-5 shrink-0 text-[#2563EB]"
                       aria-hidden="true"
                     />
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <h3 className="text-lg font-semibold text-[#07090E]">
-                        Mensaje registrado correctamente
+                        Consulta registrada y turnada
                       </h3>
                       <p className="mt-1.5 text-sm text-slate-600">
-                        Gracias por escribirnos. Revisaremos tu propuesta y nos
-                        pondremos en contacto contigo pronto.
+                        {contactDispatch.emailStatus === 'sent'
+                          ? `Tus datos fueron enviados al correo vinculado (${LINKED_ADMIN_EMAIL}) y quedaron asignados desde ${contactDispatch.senderWhatsapp} hacia el Turno #${contactDispatch.advisor.slot} (${contactDispatch.advisor.display}).`
+                          : contactDispatch.emailStatus === 'activation_required'
+                            ? `Tu consulta se guardó y quedó asignada desde ${contactDispatch.senderWhatsapp} hacia el Turno #${contactDispatch.advisor.slot} (${contactDispatch.advisor.display}). El correo vinculado (${LINKED_ADMIN_EMAIL}) recibió el enlace de activación por única vez para futuros envíos automáticos.`
+                            : `Tu consulta se guardó en el sistema para ${LINKED_ADMIN_EMAIL} y quedó asignada desde ${contactDispatch.senderWhatsapp} hacia el Turno #${contactDispatch.advisor.slot} (${contactDispatch.advisor.display}).`}
+                        {contactDispatch.webhookStatus === 'sent'
+                          ? ' Además, el reenvío automático por WhatsApp fue disparado.'
+                          : ''}
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => setContactSubmitted(false)}
-                        className="mt-5 rounded-lg bg-[#07090E] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#2563EB]"
-                      >
-                        Enviar otro mensaje
-                      </button>
+
+                      <div className="mt-5 flex flex-wrap items-center gap-3">
+                        <a
+                          href={contactDispatch.whatsappUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 rounded-lg bg-[#2563EB] px-4 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]"
+                        >
+                          <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                          <span>
+                            Abrir WhatsApp (Turno {contactDispatch.advisor.slot}:{' '}
+                            {contactDispatch.advisor.display})
+                          </span>
+                        </a>
+
+                        {contactDispatch.emailStatus !== 'sent' && (
+                          <a
+                            href={contactDispatch.mailtoUrl}
+                            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-xs font-semibold text-[#07090E] transition-colors hover:border-[#2563EB] hover:text-[#2563EB]"
+                          >
+                            <Mail className="h-4 w-4" aria-hidden="true" />
+                            <span>Enviar copia por correo</span>
+                          </a>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => setContactDispatch(null)}
+                          className="rounded-lg bg-[#07090E] px-4 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-slate-800"
+                        >
+                          Enviar otro mensaje
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
               ) : (
                 <form
-                  onSubmit={handleContactSubmit}
+                  onSubmit={(e) => void handleContactSubmit(e)}
                   noValidate
                   className="space-y-5 rounded-xl border border-slate-200 bg-white p-6 sm:p-8"
                 >
@@ -561,6 +634,7 @@ export default function App() {
                         id="contact-name"
                         type="text"
                         required
+                        maxLength={120}
                         value={contactName}
                         onChange={(e) => setContactName(e.target.value)}
                         placeholder="Clara Mendoza"
@@ -579,6 +653,7 @@ export default function App() {
                         id="contact-email"
                         type="email"
                         required
+                        maxLength={160}
                         value={contactEmail}
                         onChange={(e) => setContactEmail(e.target.value)}
                         placeholder="clara@correo.com"
@@ -597,6 +672,8 @@ export default function App() {
                     <input
                       id="contact-ref"
                       type="tel"
+                      required
+                      maxLength={40}
                       value={contactReference}
                       onChange={(e) => setContactReference(e.target.value)}
                       placeholder="Ej. +503 7123-4567"
@@ -615,6 +692,7 @@ export default function App() {
                       id="contact-message"
                       rows={4}
                       required
+                      maxLength={2000}
                       value={contactMessage}
                       onChange={(e) => setContactMessage(e.target.value)}
                       placeholder="Cuéntanos sobre tus objetivos físicos, lesiones previas o consulta..."
@@ -634,9 +712,10 @@ export default function App() {
                   <div className="flex justify-end">
                     <button
                       type="submit"
-                      className="rounded-lg bg-[#2563EB] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]"
+                      disabled={contactSubmitting}
+                      className="rounded-lg bg-[#2563EB] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]"
                     >
-                      Enviar consulta
+                      {contactSubmitting ? 'Enviando...' : 'Enviar consulta'}
                     </button>
                   </div>
                 </form>
