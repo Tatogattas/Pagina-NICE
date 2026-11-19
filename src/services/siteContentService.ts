@@ -6,6 +6,10 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import {
+  isKnownVideoUrl,
+  normalizeExternalMediaInput,
+} from '../data/externalMedia';
+import {
   DEFAULT_SITE_CONFIG,
   type SiteContentConfig,
 } from '../data/siteConfig';
@@ -55,7 +59,17 @@ export function sanitizeSiteConfig(
     galleryItems: (Array.isArray(raw.galleryItems) ? raw.galleryItems : [])
       .slice(0, 50)
       .map((item, idx) => {
-        const cleanVideoUrl = clampStr(item.videoUrl || '', 1000);
+        const normalizedImage = normalizeExternalMediaInput(item.imageUrl || '');
+        const normalizedVideo = normalizeExternalMediaInput(item.videoUrl || '');
+        const inferredVideo =
+          !normalizedVideo && normalizedImage && isKnownVideoUrl(normalizedImage)
+            ? normalizedImage
+            : normalizedVideo;
+        const cleanVideoUrl = clampStr(inferredVideo, 1000);
+        const cleanImageUrl = clampStr(
+          normalizedImage === cleanVideoUrl ? '' : normalizedImage,
+          1000
+        );
         const mediaType =
           item.mediaType === 'video' || Boolean(cleanVideoUrl)
             ? 'video'
@@ -67,7 +81,7 @@ export function sanitizeSiteConfig(
           category: item.category,
           location: clampStr(item.location, 120),
           year: clampStr(item.year, 16),
-          imageUrl: clampStr(item.imageUrl || '', 1000),
+          imageUrl: cleanImageUrl,
           ...(cleanVideoUrl ? {videoUrl: cleanVideoUrl} : {}),
           alt: clampStr(item.alt, 300),
           aspectHint: clampStr(item.aspectHint || '4:3', 20),

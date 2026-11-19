@@ -1,7 +1,9 @@
 import {ChevronLeft, ChevronRight, ExternalLink, Film, X} from 'lucide-react';
 import {useEffect, useMemo, useState} from 'react';
 import {
+  buildAutoplayEmbedUrl,
   extractDomainLabel,
+  getItemVideoUrl,
   isVideoGalleryItem,
   parseExternalVideoUrl,
   type GalleryItem,
@@ -26,11 +28,12 @@ export function LightboxModal({
   const currentItem = isOpen ? items[activeIndex] : null;
 
   const isVideo = currentItem ? isVideoGalleryItem(currentItem) : false;
+  const effectiveVideoUrl = currentItem && isVideo ? getItemVideoUrl(currentItem) : '';
   const parsedVideo = useMemo(() => {
     setVideoLoadError(false);
-    if (!currentItem || !isVideo || !currentItem.videoUrl) return null;
-    return parseExternalVideoUrl(currentItem.videoUrl);
-  }, [currentItem, isVideo]);
+    if (!effectiveVideoUrl) return null;
+    return parseExternalVideoUrl(effectiveVideoUrl);
+  }, [effectiveVideoUrl]);
 
   useEffect(() => {
     if (!isOpen || activeIndex === null) return;
@@ -54,13 +57,15 @@ export function LightboxModal({
   }
 
   const externalHref =
-    (isVideo && (parsedVideo?.originalUrl || currentItem.videoUrl)) ||
+    (isVideo && (parsedVideo?.originalUrl || effectiveVideoUrl)) ||
     currentItem.imageUrl;
 
   const hostText =
     isVideo && parsedVideo
       ? `Video · ${parsedVideo.platformLabel}`
       : extractDomainLabel(externalHref);
+
+  const embedSrc = parsedVideo ? buildAutoplayEmbedUrl(parsedVideo) : '';
 
   return (
     <div
@@ -100,7 +105,7 @@ export function LightboxModal({
             >
               <span>
                 {parsedVideo
-                  ? `Abrir en ${parsedVideo.platformLabel}`
+                  ? `Ver en ${parsedVideo.platformLabel}`
                   : 'Abrir enlace original'}
               </span>
               <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
@@ -147,8 +152,8 @@ export function LightboxModal({
                 }
               >
                 <iframe
-                  key={parsedVideo.embedUrl}
-                  src={parsedVideo.embedUrl}
+                  key={embedSrc}
+                  src={embedSrc}
                   title={currentItem.title}
                   className="h-full w-full border-0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"

@@ -16,11 +16,13 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import {useEffect, useMemo, useState, type FormEvent} from 'react';
+import {useEffect, useMemo, useRef, useState, type FormEvent} from 'react';
 import {
   getGalleryItemThumbnail,
+  isKnownVideoUrl,
   isValidHttpsUrl,
   isVideoGalleryItem,
+  normalizeExternalMediaInput,
   parseExternalVideoUrl,
   type GalleryCategory,
   type GalleryItem,
@@ -81,17 +83,29 @@ export function AdminPanelModal({
 
   const parsedGalleryVideo = useMemo(() => {
     if (itemMediaType !== 'video' || !itemVideoUrl.trim()) return null;
-    return parseExternalVideoUrl(itemVideoUrl);
+    return parseExternalVideoUrl(itemVideoUrl, {allowGenericDirectUrl: true});
   }, [itemMediaType, itemVideoUrl]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    setDraft(config);
-    setActiveTab(initialTab);
-    setErrorMsg(null);
-    setSavedFeedback(null);
+  const wasOpenRef = useRef(false);
 
-    if (editingGalleryItemId) {
+  useEffect(() => {
+    if (!isOpen) {
+      wasOpenRef.current = false;
+      return;
+    }
+
+    setDraft(config);
+
+    const justOpened = !wasOpenRef.current;
+    wasOpenRef.current = true;
+
+    if (justOpened) {
+      setActiveTab(initialTab);
+      setErrorMsg(null);
+      setSavedFeedback(null);
+    }
+
+    if (editingGalleryItemId && justOpened) {
       const target = config.galleryItems.find(
         (g) => g.id === editingGalleryItemId
       );
@@ -107,7 +121,7 @@ export function AdminPanelModal({
         setImgYear(target.year);
         setImgAlt(target.alt);
       }
-    } else {
+    } else if (justOpened) {
       resetItemForm();
     }
   }, [isOpen, initialTab, editingGalleryItemId, config]);
@@ -228,11 +242,23 @@ export function AdminPanelModal({
       return;
     }
 
-    let finalImageUrl = imgUrl.trim();
+    let effectiveMediaType = itemMediaType;
+    let finalImageUrl = normalizeExternalMediaInput(imgUrl);
     let finalVideoUrl: string | undefined;
 
-    if (itemMediaType === 'video') {
-      const parsed = parseExternalVideoUrl(itemVideoUrl);
+    if (effectiveMediaType === 'image' && isKnownVideoUrl(finalImageUrl)) {
+      effectiveMediaType = 'video';
+      finalVideoUrl = finalImageUrl;
+      finalImageUrl = '';
+    }
+
+    if (effectiveMediaType === 'video') {
+      const candidateVideo = normalizeExternalMediaInput(
+        finalVideoUrl || itemVideoUrl
+      );
+      const parsed = parseExternalVideoUrl(candidateVideo, {
+        allowGenericDirectUrl: true,
+      });
       if (!parsed) {
         setErrorMsg(
           'Ingresa un enlace válido de video o reel de YouTube, Facebook, Instagram, Vimeo o MP4/WebM (https://).'
@@ -248,7 +274,7 @@ export function AdminPanelModal({
       if (!finalImageUrl && parsed.thumbnailUrl) {
         finalImageUrl = parsed.thumbnailUrl;
       }
-      finalVideoUrl = itemVideoUrl.trim();
+      finalVideoUrl = candidateVideo;
     } else {
       if (!isValidHttpsUrl(finalImageUrl)) {
         setErrorMsg(
@@ -264,17 +290,19 @@ export function AdminPanelModal({
         item.id === selectedItemId
           ? {
               ...item,
-              mediaType: itemMediaType,
+              mediaType: effectiveMediaType,
               imageUrl: finalImageUrl,
               ...(finalVideoUrl ? {videoUrl: finalVideoUrl} : {videoUrl: ''}),
               title: imgTitle.trim(),
               category: imgCategory,
               location:
                 imgLocation.trim() ||
-                (itemMediaType === 'video' ? 'Enlace de video' : 'Enlace externo'),
+                (effectiveMediaType === 'video'
+                  ? 'Enlace de video'
+                  : 'Enlace externo'),
               year:
                 imgYear.trim() ||
-                (itemMediaType === 'video'
+                (effectiveMediaType === 'video'
                   ? 'Video'
                   : String(new Date().getFullYear())),
               alt: imgAlt.trim() || imgTitle.trim(),
@@ -283,22 +311,24 @@ export function AdminPanelModal({
       );
     } else {
       const newItem: GalleryItem = {
-        id: `${itemMediaType === 'video' ? 'vid' : 'img'}-${Date.now()}`,
-        mediaType: itemMediaType,
+        id: `${effectiveMediaType === 'video' ? 'vid' : 'img'}-${Date.now()}`,
+        mediaType: effectiveMediaType,
         imageUrl: finalImageUrl,
         ...(finalVideoUrl ? {videoUrl: finalVideoUrl} : {}),
         title: imgTitle.trim(),
         category: imgCategory,
         location:
           imgLocation.trim() ||
-          (itemMediaType === 'video' ? 'Enlace de video' : 'Enlace externo'),
+          (effectiveMediaType === 'video'
+            ? 'Enlace de video'
+            : 'Enlace externo'),
         year:
           imgYear.trim() ||
-          (itemMediaType === 'video'
+          (effectiveMediaType === 'video'
             ? 'Video'
             : String(new Date().getFullYear())),
         alt: imgAlt.trim() || imgTitle.trim(),
-        aspectHint: itemMediaType === 'video' ? '16:9' : '4:3',
+        aspectHint: effectiveMediaType === 'video' ? '16:9' : '4:3',
         isCustom: true,
       };
       nextItems = [newItem, ...draft.galleryItems];
@@ -309,7 +339,7 @@ export function AdminPanelModal({
       updated,
       selectedItemId
         ? 'Elemento actualizado y publicado para todos.'
-        : itemMediaType === 'video'
+        : effectiveMediaType === 'video'
           ? 'Video añadido y publicado para todos.'
           : 'Imagen añadida y publicada para todos.'
     );
@@ -854,12 +884,15 @@ export function AdminPanelModal({
                         URL del video o reel (YouTube, Facebook, Instagram, Vimeo o MP4)
                       </label>
                       <input
-                        type="url"
+                        type="text"
+                        inputMode="url"
                         required
                         maxLength={1000}
                         value={itemVideoUrl}
-                        onChange={(e) => setItemVideoUrl(e.target.value)}
-                        placeholder="https://www.instagram.com/reel/... o facebook.com/... o youtube.com/..."
+                        onChange={(e) =>
+                          setItemVideoUrl(normalizeExternalMediaInput(e.target.value))
+                        }
+                        placeholder="https://www.youtube.com/watch?v=... | instagram.com/reel/... | facebook.com/..."
                         className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
                       />
                       {itemVideoUrl.trim() && (
@@ -871,7 +904,7 @@ export function AdminPanelModal({
                           }`}
                         >
                           {parsedGalleryVideo
-                            ? `Plataforma detectada: ${parsedGalleryVideo.platformLabel} (reproductor listo)`
+                            ? `Plataforma detectada: ${parsedGalleryVideo.platformLabel} (se reproduce directo en la galería)`
                             : 'Enlace no reconocido. Para Instagram usa un Reel o publicación (/reel/ o /p/); para Facebook usa /watch, /videos o /reel.'}
                         </p>
                       )}
@@ -890,8 +923,8 @@ export function AdminPanelModal({
                         className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
                       />
                       <p className="mt-1.5 text-xs text-slate-500">
-                        Si se deja vacío en Facebook o Instagram, se muestra una
-                        tarjeta elegante de video con botón de reproducción.
+                        Si se deja vacío en Facebook o Instagram, el reproductor
+                        se muestra directamente dentro de la tarjeta de galería.
                       </p>
                     </div>
                   </div>
@@ -901,14 +934,32 @@ export function AdminPanelModal({
                   {itemMediaType === 'image' && (
                     <div>
                       <label className="block text-xs font-semibold text-[#07090E]">
-                        URL externa de la imagen (HTTPS)
+                        URL externa de la imagen (o pega un enlace de video)
                       </label>
                       <input
-                        type="url"
+                        type="text"
+                        inputMode="url"
                         required
                         maxLength={1000}
                         value={imgUrl}
-                        onChange={(e) => setImgUrl(e.target.value)}
+                        onChange={(e) => {
+                          const normalized = normalizeExternalMediaInput(
+                            e.target.value
+                          );
+                          if (isKnownVideoUrl(normalized)) {
+                            setItemMediaType('video');
+                            setItemVideoUrl(normalized);
+                            setImgUrl('');
+                            if (imgYear === String(new Date().getFullYear())) {
+                              setImgYear('Video');
+                            }
+                            flashSaved(
+                              'Se detectó un enlace de video; cambiado automáticamente a modo Video.'
+                            );
+                          } else {
+                            setImgUrl(normalized);
+                          }
+                        }}
                         placeholder="https://..."
                         className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
                       />

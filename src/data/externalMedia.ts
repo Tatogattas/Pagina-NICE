@@ -174,9 +174,21 @@ export const DEFAULT_GALLERY_ITEMS: GalleryItem[] = [
   },
 ];
 
+export function normalizeExternalMediaInput(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (trimmed.toLowerCase().includes('<iframe')) {
+    const srcMatch = trimmed.match(/src\s*=\s*["']([^"']+)["']/i);
+    if (srcMatch?.[1]) {
+      return srcMatch[1].trim();
+    }
+  }
+  return trimmed;
+}
+
 export function isValidHttpsUrl(raw: string): boolean {
   try {
-    const parsed = new URL(raw.trim());
+    const parsed = new URL(normalizeExternalMediaInput(raw));
     return parsed.protocol === 'https:' || parsed.protocol === 'http:';
   } catch {
     return false;
@@ -185,15 +197,24 @@ export function isValidHttpsUrl(raw: string): boolean {
 
 export function extractDomainLabel(rawUrl: string): string {
   try {
-    const u = new URL(rawUrl);
+    const u = new URL(normalizeExternalMediaInput(rawUrl));
     return u.hostname.replace(/^www\./, '');
   } catch {
     return 'enlace externo';
   }
 }
 
-export function parseExternalVideoUrl(rawUrl: string): ParsedVideoSource | null {
-  const trimmed = rawUrl.trim();
+export interface ParseVideoOptions {
+  allowGenericDirectUrl?: boolean;
+}
+
+const DIRECT_VIDEO_EXT_RE = /\.(mp4|webm|mov|m4v|ogg|ogv|m3u8)(\?|#|$)/i;
+
+export function parseExternalVideoUrl(
+  rawUrl: string,
+  options: ParseVideoOptions = {allowGenericDirectUrl: true}
+): ParsedVideoSource | null {
+  const trimmed = normalizeExternalMediaInput(rawUrl);
   if (!isValidHttpsUrl(trimmed)) {
     return null;
   }
@@ -203,8 +224,13 @@ export function parseExternalVideoUrl(rawUrl: string): ParsedVideoSource | null 
     const host = url.hostname.toLowerCase();
     const path = url.pathname;
 
-    // 1. YouTube (watch, shorts, live, embed, youtu.be)
-    if (host.includes('youtube.com') || host.includes('youtube-nocookie.com')) {
+    // 1. YouTube (watch, shorts, live, embed, v, youtu.be)
+    if (
+      host === 'youtube.com' ||
+      host.endsWith('.youtube.com') ||
+      host === 'youtube-nocookie.com' ||
+      host.endsWith('.youtube-nocookie.com')
+    ) {
       let videoId = url.searchParams.get('v') || '';
       if (!videoId && path.includes('/embed/')) {
         videoId = path.split('/embed/')[1]?.split('/')[0] || '';
@@ -215,14 +241,17 @@ export function parseExternalVideoUrl(rawUrl: string): ParsedVideoSource | null 
       if (!videoId && path.includes('/live/')) {
         videoId = path.split('/live/')[1]?.split('/')[0] || '';
       }
+      if (!videoId && path.includes('/v/')) {
+        videoId = path.split('/v/')[1]?.split('/')[0] || '';
+      }
       if (videoId) {
         const cleanId = encodeURIComponent(videoId);
         return {
           kind: 'iframe',
           platform: 'youtube',
           platformLabel: 'YouTube',
-          embedUrl: `https://www.youtube-nocookie.com/embed/${cleanId}?rel=0&modestbranding=1`,
-          hostLabel: 'youtube-nocookie.com',
+          embedUrl: `https://www.youtube.com/embed/${cleanId}?rel=0&playsinline=1`,
+          hostLabel: 'youtube.com',
           originalUrl: trimmed,
           isVertical: path.includes('/shorts/'),
           thumbnailUrl: `https://i.ytimg.com/vi/${cleanId}/hqdefault.jpg`,
@@ -239,8 +268,8 @@ export function parseExternalVideoUrl(rawUrl: string): ParsedVideoSource | null 
           kind: 'iframe',
           platform: 'youtube',
           platformLabel: 'YouTube',
-          embedUrl: `https://www.youtube-nocookie.com/embed/${cleanId}?rel=0&modestbranding=1`,
-          hostLabel: 'youtube-nocookie.com',
+          embedUrl: `https://www.youtube.com/embed/${cleanId}?rel=0&playsinline=1`,
+          hostLabel: 'youtube.com',
           originalUrl: trimmed,
           thumbnailUrl: `https://i.ytimg.com/vi/${cleanId}/hqdefault.jpg`,
         };
@@ -271,14 +300,15 @@ export function parseExternalVideoUrl(rawUrl: string): ParsedVideoSource | null 
       const isFbVideoLink =
         host.includes('fb.watch') ||
         url.searchParams.has('v') ||
-        /\/(watch|videos|reel|share\/[vr]|video\.php)\b/i.test(path);
+        url.searchParams.has('story_fbid') ||
+        /\/(watch|videos|reel|posts|share\/[vr]|video\.php)\b/i.test(path);
 
       if (isFbVideoLink) {
         return {
           kind: 'iframe',
           platform: 'facebook',
           platformLabel: 'Facebook',
-          embedUrl: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(trimmed)}&show_text=false&width=734`,
+          embedUrl: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(trimmed)}&show_text=false&width=560`,
           hostLabel: 'facebook.com',
           originalUrl: trimmed,
           isVertical: /\/(reel|share\/r)\b/i.test(path),
@@ -328,32 +358,64 @@ export function parseExternalVideoUrl(rawUrl: string): ParsedVideoSource | null 
       return null;
     }
 
-    // 5. Direct MP4/WebM/OGG video links
-    return {
-      kind: 'video',
-      platform: 'direct',
-      platformLabel: 'Video directo',
-      embedUrl: trimmed,
-      hostLabel: extractDomainLabel(trimmed),
-      originalUrl: trimmed,
-    };
+    // 5. Direct video file links (.mp4, .webm, etc.)
+    if (
+      DIRECT_VIDEO_EXT_RE.test(trimmed) ||
+      options.allowGenericDirectUrl !== false
+    ) {
+      return {
+        kind: 'video',
+        platform: 'direct',
+        platformLabel: 'Video directo',
+        embedUrl: trimmed,
+        hostLabel: extractDomainLabel(trimmed),
+        originalUrl: trimmed,
+      };
+    }
+
+    return null;
   } catch {
     return null;
   }
 }
 
+export function isKnownVideoUrl(rawUrl: string): boolean {
+  const parsed = parseExternalVideoUrl(rawUrl, {allowGenericDirectUrl: false});
+  return parsed !== null;
+}
+
+export function getItemVideoUrl(item: GalleryItem): string {
+  const explicit = item.videoUrl?.trim();
+  if (explicit) return normalizeExternalMediaInput(explicit);
+  if (item.imageUrl && isKnownVideoUrl(item.imageUrl)) {
+    return normalizeExternalMediaInput(item.imageUrl);
+  }
+  return '';
+}
+
 export function isVideoGalleryItem(item: GalleryItem): boolean {
-  return item.mediaType === 'video' || Boolean(item.videoUrl?.trim());
+  return item.mediaType === 'video' || Boolean(getItemVideoUrl(item));
 }
 
 export function getGalleryItemThumbnail(item: GalleryItem): string {
   const manual = item.imageUrl?.trim();
-  if (manual) return manual;
-  if (item.videoUrl) {
-    const parsed = parseExternalVideoUrl(item.videoUrl);
+  if (manual && !isKnownVideoUrl(manual)) {
+    return manual;
+  }
+  const vidUrl = getItemVideoUrl(item);
+  if (vidUrl) {
+    const parsed = parseExternalVideoUrl(vidUrl);
     if (parsed?.thumbnailUrl) {
       return parsed.thumbnailUrl;
     }
   }
   return '';
+}
+
+export function buildAutoplayEmbedUrl(parsed: ParsedVideoSource): string {
+  if (parsed.platform === 'youtube' || parsed.platform === 'vimeo') {
+    const sep = parsed.embedUrl.includes('?') ? '&' : '?';
+    return `${parsed.embedUrl}${sep}autoplay=1`;
+  }
+  return parsed.embedUrl;
 }

@@ -1,15 +1,18 @@
 import {
   ArrowUpRight,
   Image as ImageIcon,
+  Maximize2,
   Pencil,
   Play,
   Plus,
   Trash2,
 } from 'lucide-react';
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import {
+  buildAutoplayEmbedUrl,
   extractDomainLabel,
   getGalleryItemThumbnail,
+  getItemVideoUrl,
   isVideoGalleryItem,
   parseExternalVideoUrl,
   type GalleryCategory,
@@ -56,12 +59,42 @@ function GalleryCard({
 }: GalleryCardProps) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [isPlayingInline, setIsPlayingInline] = useState(false);
+  const [inlineVideoFailed, setInlineVideoFailed] = useState(false);
 
   const isVideo = isVideoGalleryItem(item);
-  const parsedVideo =
-    isVideo && item.videoUrl ? parseExternalVideoUrl(item.videoUrl) : null;
+  const effectiveVideoUrl = isVideo ? getItemVideoUrl(item) : '';
+  const parsedVideo = effectiveVideoUrl
+    ? parseExternalVideoUrl(effectiveVideoUrl)
+    : null;
   const thumbnailUrl = isVideo ? getGalleryItemThumbnail(item) : item.imageUrl;
   const hasThumbnail = Boolean(thumbnailUrl) && !failed;
+
+  useEffect(() => {
+    setLoaded(false);
+    setFailed(false);
+    setIsPlayingInline(false);
+    setInlineVideoFailed(false);
+  }, [item.id, item.imageUrl, effectiveVideoUrl]);
+
+  // Show embedded video directly inside the gallery card when user clicks Play
+  // OR immediately when the platform (e.g. Facebook / Instagram) has no static poster URL
+  const showEmbeddedVideo =
+    isVideo &&
+    parsedVideo &&
+    !inlineVideoFailed &&
+    (isPlayingInline || !hasThumbnail);
+
+  const iframeSrc =
+    parsedVideo && isPlayingInline
+      ? buildAutoplayEmbedUrl(parsedVideo)
+      : parsedVideo?.embedUrl || '';
+
+  const frameSizeClass = isFeatured
+    ? 'aspect-[16/10] lg:h-[380px] lg:aspect-auto'
+    : parsedVideo?.platform === 'instagram' && showEmbeddedVideo
+      ? 'aspect-[4/5] sm:aspect-[4/3]'
+      : 'aspect-[4/3]';
 
   return (
     <article
@@ -69,85 +102,118 @@ function GalleryCard({
         isFeatured ? 'md:col-span-2' : ''
       }`}
     >
-      <button
-        type="button"
-        onClick={onSelect}
-        aria-label={
-          isVideo
-            ? `Reproducir video: ${item.title}`
-            : `Ampliar imagen: ${item.title}`
-        }
-        className={`relative w-full overflow-hidden bg-[#0A0E17] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB] ${
-          isFeatured
-            ? 'aspect-[16/10] lg:h-[380px] lg:aspect-auto'
-            : 'aspect-[4/3]'
-        }`}
-      >
-        {hasThumbnail && !loaded && (
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 animate-pulse bg-slate-900"
-          />
-        )}
+      {showEmbeddedVideo && parsedVideo ? (
+        <div
+          className={`relative w-full overflow-hidden ${
+            parsedVideo.platform === 'instagram' ? 'bg-white' : 'bg-black'
+          } ${frameSizeClass}`}
+        >
+          {parsedVideo.kind === 'iframe' ? (
+            <iframe
+              key={iframeSrc}
+              src={iframeSrc}
+              title={item.title}
+              className="h-full w-full border-0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allowFullScreen
+            />
+          ) : (
+            <video
+              key={parsedVideo.embedUrl}
+              src={parsedVideo.embedUrl}
+              controls
+              autoPlay={isPlayingInline}
+              playsInline
+              preload="metadata"
+              onError={() => setInlineVideoFailed(true)}
+              className="h-full w-full bg-black object-cover"
+            />
+          )}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            if (isVideo && parsedVideo) {
+              setIsPlayingInline(true);
+            } else {
+              onSelect();
+            }
+          }}
+          aria-label={
+            isVideo
+              ? `Reproducir video: ${item.title}`
+              : `Ampliar imagen: ${item.title}`
+          }
+          className={`relative w-full overflow-hidden bg-[#0A0E17] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB] ${frameSizeClass}`}
+        >
+          {hasThumbnail && !loaded && (
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 animate-pulse bg-slate-900"
+            />
+          )}
 
-        {hasThumbnail ? (
-          <img
-            src={thumbnailUrl}
-            alt={item.alt || item.title}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            onLoad={() => setLoaded(true)}
-            onError={() => setFailed(true)}
-            className={`h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.02] ${
-              loaded ? 'opacity-100' : 'opacity-0'
+          {hasThumbnail ? (
+            <img
+              src={thumbnailUrl}
+              alt={item.alt || item.title}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              onLoad={() => setLoaded(true)}
+              onError={() => setFailed(true)}
+              className={`h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.02] ${
+                loaded ? 'opacity-100' : 'opacity-0'
+              }`}
+            />
+          ) : isVideo ? (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-[#07090E] via-[#0F1B33] to-[#1E3A8A] p-6 text-center text-white">
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-[#2563EB] text-white shadow-lg transition-transform duration-200 group-hover:scale-105">
+                <Play className="ml-0.5 h-5 w-5 fill-current" aria-hidden="true" />
+              </span>
+              <div className="max-w-xs space-y-1">
+                <p className="text-sm font-semibold leading-snug text-white">
+                  {item.title}
+                </p>
+                <p className="font-mono text-xs text-[#93C5FD]">
+                  {parsedVideo ? parsedVideo.platformLabel : 'Video externo'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-[#07090E] via-[#0F1B33] to-[#1E3A8A] p-6 text-center text-white">
+              <ImageIcon className="h-7 w-7 text-[#60A5FA]" aria-hidden="true" />
+              <p className="text-sm font-medium">{item.title}</p>
+              <span className="font-mono text-xs text-slate-300">
+                {extractDomainLabel(item.imageUrl)}
+              </span>
+            </div>
+          )}
+
+          <div
+            className={`pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent transition-opacity duration-200 ${
+              isVideo && hasThumbnail
+                ? 'opacity-70 group-hover:opacity-90'
+                : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
             }`}
           />
-        ) : isVideo ? (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-[#07090E] via-[#0F1B33] to-[#1E3A8A] p-6 text-center text-white">
-            <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-[#2563EB] text-white shadow-lg transition-transform duration-200 group-hover:scale-105">
-              <Play className="ml-0.5 h-5 w-5 fill-current" aria-hidden="true" />
-            </span>
-            <div className="max-w-xs space-y-1">
-              <p className="text-sm font-semibold leading-snug text-white">
-                {item.title}
-              </p>
-              <p className="font-mono text-xs text-[#93C5FD]">
-                {parsedVideo ? parsedVideo.platformLabel : 'Video externo'}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-[#07090E] via-[#0F1B33] to-[#1E3A8A] p-6 text-center text-white">
-            <ImageIcon className="h-7 w-7 text-[#60A5FA]" aria-hidden="true" />
-            <p className="text-sm font-medium">{item.title}</p>
-            <span className="font-mono text-xs text-slate-300">
-              {extractDomainLabel(item.imageUrl)}
-            </span>
-          </div>
-        )}
 
-        <div
-          className={`pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent transition-opacity duration-200 ${
-            isVideo && hasThumbnail
-              ? 'opacity-70 group-hover:opacity-90'
-              : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
-          }`}
-        />
-
-        {isVideo && hasThumbnail ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#2563EB]/95 text-white shadow-lg transition-transform duration-200 group-hover:scale-105">
-              <Play className="ml-0.5 h-5 w-5 fill-current" aria-hidden="true" />
-            </span>
-          </div>
-        ) : (
-          !isVideo && (
-            <div className="pointer-events-none absolute right-4 bottom-4 flex h-9 w-9 items-center justify-center rounded-lg bg-[#2563EB] text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
-              <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+          {isVideo && hasThumbnail ? (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#2563EB]/95 text-white shadow-lg transition-transform duration-200 group-hover:scale-105">
+                <Play className="ml-0.5 h-5 w-5 fill-current" aria-hidden="true" />
+              </span>
             </div>
-          )
-        )}
-      </button>
+          ) : (
+            !isVideo && (
+              <div className="pointer-events-none absolute right-4 bottom-4 flex h-9 w-9 items-center justify-center rounded-lg bg-[#2563EB] text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+                <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+              </div>
+            )
+          )}
+        </button>
+      )}
 
       {/* Clean unboxed editorial metadata footer */}
       <div className="flex items-start justify-between gap-4 p-5">
@@ -176,26 +242,40 @@ function GalleryCard({
           </div>
         </div>
 
-        {isAdmin && (
-          <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
+          {isVideo && (
             <button
               type="button"
-              onClick={onEdit}
-              aria-label={`Editar ${item.title}`}
+              onClick={onSelect}
+              aria-label={`Ampliar video: ${item.title}`}
+              title="Abrir en visor ampliado"
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-[#2563EB] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]"
             >
-              <Pencil className="h-4 w-4" aria-hidden="true" />
+              <Maximize2 className="h-4 w-4" aria-hidden="true" />
             </button>
-            <button
-              type="button"
-              onClick={onRemove}
-              aria-label={`Eliminar ${item.title}`}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]"
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
-        )}
+          )}
+
+          {isAdmin && (
+            <>
+              <button
+                type="button"
+                onClick={onEdit}
+                aria-label={`Editar ${item.title}`}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-[#2563EB] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]"
+              >
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={onRemove}
+                aria-label={`Eliminar ${item.title}`}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </article>
   );
