@@ -110,86 +110,49 @@ function StaticMapThumbnailLayer({
   );
 }
 
+const STATIC_LOCATION_PHOTO_SRC = `${import.meta.env.BASE_URL}assets/aistudio/Captura_desde_2026-11-20_07-50-00_89b37940.png`;
+
 interface StaticLocationPhotoCardProps extends LocationVisualProps {
   onEnableInteractive?: () => void;
 }
 
 function StaticLocationPhotoCard({
-  apiKey,
   brandName,
   addressLabel,
-  center,
-  hasCustomCoords,
   googleMapsUrl,
   onEnableInteractive,
 }: StaticLocationPhotoCardProps) {
   return (
-    <div className="group relative flex h-[380px] w-full flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-[#E8EDF5] p-4 text-[#07090E] shadow-sm transition-colors hover:border-[#2563EB] sm:h-[440px] sm:p-5">
-      <StaticMapThumbnailLayer
-        apiKey={apiKey}
-        brandName={brandName}
-        addressLabel={addressLabel}
-        center={center}
-        hasCustomCoords={hasCustomCoords}
-      />
-
-      <a
-        href={googleMapsUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={`Abrir ubicación de ${brandName} en Google Maps`}
-        className="absolute inset-0 z-10"
-      />
-
-      <div className="pointer-events-none relative z-20 flex flex-wrap items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white/95 px-3 py-1.5 text-xs font-semibold text-[#07090E] shadow-xs">
-          <MapPin className="h-3.5 w-3.5 text-[#2563EB]" aria-hidden="true" />
-          <span>Google Maps · Vista estática</span>
-        </span>
-
-        <div className="pointer-events-auto flex items-center gap-2">
-          {onEnableInteractive && (
-            <button
-              type="button"
-              onClick={onEnableInteractive}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/95 px-3 py-1.5 text-xs font-semibold text-[#07090E] shadow-xs transition-colors hover:border-[#2563EB] hover:text-[#2563EB]"
-            >
-              <Compass className="h-3.5 w-3.5 text-[#2563EB]" aria-hidden="true" />
-              <span>Mapa interactivo</span>
-            </button>
-          )}
-          <a
-            href={googleMapsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`Abrir ${brandName} en Google Maps`}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white/95 text-[#07090E] shadow-xs transition-colors hover:border-[#2563EB] hover:text-[#2563EB]"
-          >
-            <ExternalLink className="h-4 w-4" aria-hidden="true" />
-          </a>
-        </div>
+    <div className="space-y-2.5">
+      <div className="group relative h-[320px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-[#E8EDF5] shadow-sm transition-colors hover:border-[#2563EB] sm:h-[440px]">
+        <a
+          href={googleMapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Abrir ubicación de ${brandName} en Google Maps`}
+          className="block h-full w-full"
+        >
+          <img
+            src={STATIC_LOCATION_PHOTO_SRC}
+            alt={`Foto de ubicación en Google Maps de ${brandName} (${addressLabel})`}
+            decoding="async"
+            className="h-full w-full object-cover"
+          />
+        </a>
       </div>
 
-      <a
-        href={googleMapsUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="relative z-20 mt-auto flex flex-col gap-3 rounded-xl border border-slate-200 bg-white/95 p-4 shadow-md backdrop-blur-xs transition-colors hover:border-[#2563EB] sm:flex-row sm:items-center sm:justify-between"
-      >
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-[#07090E]">{brandName}</p>
-          <p className="mt-0.5 truncate text-xs text-slate-600">{addressLabel}</p>
-          {hasCustomCoords && (
-            <p className="mt-1 font-mono text-[11px] text-slate-500">
-              {center.lat.toFixed(5)}, {center.lng.toFixed(5)}
-            </p>
-          )}
+      {onEnableInteractive && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onEnableInteractive}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 transition-colors hover:text-[#2563EB]"
+          >
+            <Compass className="h-3.5 w-3.5 text-[#2563EB]" aria-hidden="true" />
+            <span>Cambiar a mapa interactivo</span>
+          </button>
         </div>
-        <span className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-4 py-2.5 text-xs font-semibold text-white transition-colors group-hover:bg-[#1D4ED8]">
-          <Navigation className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>Cómo llegar</span>
-        </span>
-      </a>
+      )}
     </div>
   );
 }
