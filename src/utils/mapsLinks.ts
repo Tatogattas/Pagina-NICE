@@ -33,6 +33,33 @@ export function hasValidCoordinates(
   );
 }
 
+export function extractGoogleMapsQuery(input: string): string {
+  const text = input.trim();
+  if (!text) return '';
+  try {
+    const url = new URL(text);
+    const paramQuery =
+      url.searchParams.get('q') ||
+      url.searchParams.get('query') ||
+      url.searchParams.get('destination') ||
+      url.searchParams.get('daddr');
+    if (paramQuery && paramQuery.trim()) {
+      return paramQuery.trim();
+    }
+    const placeMatch = url.pathname.match(/\/maps\/place\/([^/]+)/i);
+    if (placeMatch?.[1]) {
+      return decodeURIComponent(placeMatch[1].replace(/\+/g, ' ')).trim();
+    }
+    const searchMatch = url.pathname.match(/\/maps\/search\/([^/]+)/i);
+    if (searchMatch?.[1]) {
+      return decodeURIComponent(searchMatch[1].replace(/\+/g, ' ')).trim();
+    }
+  } catch {
+    // Not a full URL
+  }
+  return '';
+}
+
 export function buildNavigationLinks(
   config: Pick<
     SiteContentConfig,
@@ -42,32 +69,41 @@ export function buildNavigationLinks(
     | 'locationMapsUrl'
     | 'locationLat'
     | 'locationLng'
-  >
+  >,
+  resolvedCoords?: GeoCoords | null
 ) {
-  const hasCustomCoords = hasValidCoordinates(
+  const explicitCustomCoords = hasValidCoordinates(
     config.locationLat,
     config.locationLng
   );
-  const center: GeoCoords = hasCustomCoords
-    ? {lat: config.locationLat as number, lng: config.locationLng as number}
-    : DEFAULT_REFERENCE_CENTER;
+  const hasResolvedCoords =
+    !explicitCustomCoords &&
+    Boolean(resolvedCoords && hasValidCoordinates(resolvedCoords.lat, resolvedCoords.lng));
+  const hasCustomCoords = explicitCustomCoords || hasResolvedCoords;
 
+  const center: GeoCoords = explicitCustomCoords
+    ? {lat: config.locationLat as number, lng: config.locationLng as number}
+    : hasResolvedCoords && resolvedCoords
+      ? {lat: resolvedCoords.lat, lng: resolvedCoords.lng}
+      : DEFAULT_REFERENCE_CENTER;
+
+  const customMapsUrl = config.locationMapsUrl?.trim() || '';
+  const urlPlaceQuery = extractGoogleMapsQuery(customMapsUrl);
   const queryLabel =
     config.locationAddress?.trim() ||
+    urlPlaceQuery ||
     config.contactLocation?.trim() ||
     config.brandName;
 
-  const customMapsUrl = config.locationMapsUrl?.trim() || '';
   const destinationParam = hasCustomCoords
     ? `${center.lat},${center.lng}`
     : queryLabel;
 
-  const googleMapsUrl =
-    /^https:\/\/.+/.test(customMapsUrl)
-      ? customMapsUrl
-      : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-          destinationParam
-        )}`;
+  const googleMapsUrl = /^https:\/\/.+/.test(customMapsUrl)
+    ? customMapsUrl
+    : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+        destinationParam
+      )}`;
 
   const wazeUrl = hasCustomCoords
     ? `https://waze.com/ul?ll=${center.lat},${center.lng}&navigate=yes`
@@ -87,13 +123,56 @@ export function buildNavigationLinks(
 
   return {
     hasCustomCoords,
+    explicitCustomCoords,
     center,
     queryLabel,
+    urlPlaceQuery,
     googleMapsUrl,
     wazeUrl,
     appleMapsUrl,
     geoUri,
   };
+}
+
+export interface StaticMapThumbnailOptions {
+  apiKey: string;
+  center: GeoCoords;
+  hasCustomCoords: boolean;
+  queryLabel?: string;
+  zoom?: number;
+  size?: string;
+}
+
+export function buildStaticMapThumbnailUrl({
+  apiKey,
+  center,
+  hasCustomCoords,
+  queryLabel,
+  zoom,
+  size = '640x420',
+}: StaticMapThumbnailOptions): string {
+  const cleanKey = apiKey.trim();
+  if (!cleanKey) return '';
+
+  const locationTarget =
+    hasCustomCoords || !queryLabel?.trim()
+      ? `${center.lat.toFixed(6)},${center.lng.toFixed(6)}`
+      : queryLabel.trim();
+
+  const resolvedZoom = zoom ?? (hasCustomCoords ? 16 : 13);
+
+  const params = new URLSearchParams();
+  params.set('center', locationTarget);
+  params.set('zoom', String(resolvedZoom));
+  params.set('size', size);
+  params.set('scale', '2');
+  params.set('maptype', 'roadmap');
+  params.set('language', 'es');
+  params.set('region', 'SV');
+  params.set('markers', `color:0x2563EB|${locationTarget}`);
+  params.set('key', cleanKey);
+
+  return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
 }
 
 export function parseGoogleMapsCoordinates(input: string): GeoCoords | null {
@@ -110,10 +189,11 @@ export function parseGoogleMapsCoordinates(input: string): GeoCoords | null {
     }
   }
 
-  // Pattern 2: q=lat,lng | ll=lat,lng | destination=lat,lng | !3dlat!4dlng
+  // Pattern 2: q=lat,lng | query=lat,lng | ll=lat,lng | sll=lat,lng | center=lat,lng | destination=lat,lng | daddr=lat,lng | !3dlat!4dlng
   const paramMatch =
-    text.match(/(?:[?&](?:q|ll|destination)=)(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/) ||
-    text.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+    text.match(
+      /(?:[?&](?:q|query|ll|sll|center|destination|daddr)=)(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/
+    ) || text.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
   if (paramMatch) {
     const lat = Number.parseFloat(paramMatch[1]);
     const lng = Number.parseFloat(paramMatch[2]);
@@ -122,7 +202,19 @@ export function parseGoogleMapsCoordinates(input: string): GeoCoords | null {
     }
   }
 
-  // Pattern 3: plain "lat, lng"
+  // Pattern 3: /maps/place/.../lat,lng or /maps/dir/.../lat,lng
+  const pathCoordMatch = text.match(
+    /\/(?:place|dir|search)\/(?:[^/]+\/)*(-?\d+\.\d+),\s*(-?\d+\.\d+)/
+  );
+  if (pathCoordMatch) {
+    const lat = Number.parseFloat(pathCoordMatch[1]);
+    const lng = Number.parseFloat(pathCoordMatch[2]);
+    if (hasValidCoordinates(lat, lng)) {
+      return {lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6))};
+    }
+  }
+
+  // Pattern 4: plain "lat, lng"
   const plainMatch = text.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
   if (plainMatch) {
     const lat = Number.parseFloat(plainMatch[1]);

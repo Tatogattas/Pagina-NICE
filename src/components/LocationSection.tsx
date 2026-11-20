@@ -1,12 +1,15 @@
 import {
   AdvancedMarker,
   APILoadingStatus,
-  APIProvider,
+  ColorScheme,
   InfoWindow,
   Map as GoogleMap,
   Pin,
+  RenderingType,
   useAdvancedMarkerRef,
   useApiLoadingStatus,
+  useMap,
+  useMapsLibrary,
 } from '@vis.gl/react-google-maps';
 import {
   Compass,
@@ -15,9 +18,16 @@ import {
   Navigation,
   Pencil,
 } from 'lucide-react';
-import {useMemo, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import type {SiteContentConfig} from '../data/siteConfig';
-import {buildNavigationLinks, getGoogleMapsApiKey} from '../utils/mapsLinks';
+import {DEFAULT_SITE_CONFIG} from '../data/siteConfig';
+import {
+  buildNavigationLinks,
+  buildStaticMapThumbnailUrl,
+  getGoogleMapsApiKey,
+  type GeoCoords,
+} from '../utils/mapsLinks';
+import {MapsApiProvider} from './MapsApiProvider';
 
 interface LocationSectionProps {
   config: SiteContentConfig;
@@ -25,24 +35,224 @@ interface LocationSectionProps {
   onEditLocation: () => void;
 }
 
-interface InteractiveMapCanvasProps {
+interface MapCameraSyncProps {
+  center: GeoCoords;
+  zoom: number;
+}
+
+function MapCameraSync({center, zoom}: MapCameraSyncProps) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map) return;
+    map.panTo(center);
+    map.setZoom(zoom);
+  }, [map, center.lat, center.lng, zoom]);
+
+  return null;
+}
+
+interface LocationVisualProps {
+  apiKey: string;
   brandName: string;
   addressLabel: string;
-  center: {lat: number; lng: number};
+  center: GeoCoords;
   hasCustomCoords: boolean;
   googleMapsUrl: string;
 }
 
-function InteractiveMapCanvas({
+function StaticMapThumbnailLayer({
+  apiKey,
+  brandName,
+  addressLabel,
+  center,
+  hasCustomCoords,
+}: Omit<LocationVisualProps, 'googleMapsUrl'>) {
+  const staticUrl = useMemo(
+    () =>
+      buildStaticMapThumbnailUrl({
+        apiKey,
+        center,
+        hasCustomCoords,
+        queryLabel: addressLabel,
+        zoom: hasCustomCoords ? 16 : 13,
+        size: '640x440',
+      }),
+    [apiKey, center.lat, center.lng, hasCustomCoords, addressLabel]
+  );
+
+  const [failedUrl, setFailedUrl] = useState<string>('');
+  const canShowImage = Boolean(staticUrl) && failedUrl !== staticUrl;
+
+  if (!canShowImage) {
+    return (
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[#EEF3FA]"
+        style={{
+          backgroundImage:
+            'linear-gradient(to right, rgba(37,99,235,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(37,99,235,0.12) 1px, transparent 1px)',
+          backgroundSize: '32px 32px',
+        }}
+      />
+    );
+  }
+
+  return (
+    <img
+      key={staticUrl}
+      src={staticUrl}
+      alt={`Miniatura de Google Maps de ${brandName} (${addressLabel})`}
+      decoding="async"
+      onError={() => setFailedUrl(staticUrl)}
+      className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+    />
+  );
+}
+
+function FallbackLocationVisual({
+  apiKey,
   brandName,
   addressLabel,
   center,
   hasCustomCoords,
   googleMapsUrl,
+}: LocationVisualProps) {
+  return (
+    <a
+      href={googleMapsUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`Abrir ubicación de ${brandName} en Google Maps`}
+      className="group relative flex h-[380px] w-full flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-[#E8EDF5] p-6 text-[#07090E] shadow-sm transition-colors hover:border-[#2563EB] sm:h-[440px]"
+    >
+      <StaticMapThumbnailLayer
+        apiKey={apiKey}
+        brandName={brandName}
+        addressLabel={addressLabel}
+        center={center}
+        hasCustomCoords={hasCustomCoords}
+      />
+
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-t from-white/95 via-white/25 to-white/75"
+      />
+
+      <div className="relative flex items-center justify-between gap-3">
+        <span className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white/95 px-3 py-1.5 text-xs font-semibold text-[#07090E] shadow-xs">
+          <MapPin className="h-3.5 w-3.5 text-[#2563EB]" aria-hidden="true" />
+          <span>Google Maps · Navegación directa</span>
+        </span>
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white/95 text-[#07090E] shadow-xs transition-colors group-hover:border-[#2563EB] group-hover:text-[#2563EB]">
+          <ExternalLink className="h-4 w-4" aria-hidden="true" />
+        </span>
+      </div>
+
+      <div className="relative mt-auto flex flex-col gap-3 rounded-xl border border-slate-200 bg-white/95 p-4 shadow-md backdrop-blur-xs sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[#07090E]">{brandName}</p>
+          <p className="mt-0.5 truncate text-xs text-slate-600">{addressLabel}</p>
+          {hasCustomCoords && (
+            <p className="mt-1 font-mono text-[11px] text-slate-500">
+              {center.lat.toFixed(5)}, {center.lng.toFixed(5)}
+            </p>
+          )}
+        </div>
+        <span className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-4 py-2.5 text-xs font-semibold text-white transition-colors group-hover:bg-[#1D4ED8]">
+          <Navigation className="h-3.5 w-3.5" aria-hidden="true" />
+          <span>Cómo llegar</span>
+        </span>
+      </div>
+    </a>
+  );
+}
+
+interface InteractiveMapCanvasProps extends LocationVisualProps {
+  explicitCustomCoords: boolean;
+  customMapsUrl: string;
+  searchQueryForResolution: string;
+  onResolvedCoords: (coords: GeoCoords | null) => void;
+}
+
+function InteractiveMapCanvas({
+  apiKey,
+  brandName,
+  addressLabel,
+  center,
+  hasCustomCoords,
+  explicitCustomCoords,
+  googleMapsUrl,
+  searchQueryForResolution,
+  onResolvedCoords,
 }: InteractiveMapCanvasProps) {
   const status = useApiLoadingStatus();
+  const placesLib = useMapsLibrary('places');
   const [markerRef, marker] = useAdvancedMarkerRef();
   const [infoWindowOpen, setInfoWindowOpen] = useState(true);
+  const [tilesLoaded, setTilesLoaded] = useState(false);
+
+  // If the admin updated the address or place link without explicit numeric coordinates,
+  // resolve real coordinates cleanly via Places API (New) Place.searchByText.
+  useEffect(() => {
+    if (explicitCustomCoords) {
+      onResolvedCoords(null);
+      return;
+    }
+    const cleanQuery = searchQueryForResolution.trim();
+    const defaultLabel = DEFAULT_SITE_CONFIG.locationAddress?.trim() || '';
+    if (
+      !placesLib ||
+      !cleanQuery ||
+      cleanQuery === defaultLabel ||
+      cleanQuery === brandName.trim()
+    ) {
+      onResolvedCoords(null);
+      return;
+    }
+
+    let cancelled = false;
+    void placesLib.Place.searchByText({
+      textQuery: cleanQuery,
+      fields: ['location'],
+      region: 'SV',
+    })
+      .then(
+        (res: {
+          places?: Array<{
+            location?: {lat: () => number; lng: () => number} | null;
+          }>;
+        }) => {
+        if (cancelled) return;
+        const loc = res.places?.[0]?.location;
+        if (loc) {
+          onResolvedCoords({
+            lat: Number(loc.lat().toFixed(6)),
+            lng: Number(loc.lng().toFixed(6)),
+          });
+        }
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (
+          msg.includes('RESOURCE_EXHAUSTED') ||
+          msg.includes('OVER_QUERY_LIMIT') ||
+          msg.includes('429')
+        ) {
+          window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    placesLib,
+    explicitCustomCoords,
+    searchQueryForResolution,
+    brandName,
+    onResolvedCoords,
+  ]);
 
   if (
     status === APILoadingStatus.FAILED ||
@@ -50,6 +260,7 @@ function InteractiveMapCanvas({
   ) {
     return (
       <FallbackLocationVisual
+        apiKey={apiKey}
         brandName={brandName}
         addressLabel={addressLabel}
         center={center}
@@ -59,130 +270,92 @@ function InteractiveMapCanvas({
     );
   }
 
-  return (
-    <div className="relative h-[380px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm sm:h-[440px]">
-      <GoogleMap
-        key={`${center.lat.toFixed(6)},${center.lng.toFixed(6)},${hasCustomCoords ? 'custom' : 'default'}`}
-        mapId="DEMO_MAP_ID"
-        defaultCenter={center}
-        defaultZoom={hasCustomCoords ? 16 : 12}
-        gestureHandling="cooperative"
-        disableDefaultUI={false}
-        mapTypeControl={false}
-        streetViewControl={false}
-        fullscreenControl={true}
-        internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-        style={{width: '100%', height: '100%'}}
-        className="h-full w-full"
-      >
-        <AdvancedMarker
-          ref={markerRef}
-          position={center}
-          title={`${brandName} — ${addressLabel}`}
-          onClick={() => setInfoWindowOpen((prev) => !prev)}
-        >
-          <Pin
-            background="#2563EB"
-            borderColor="#07090E"
-            glyphColor="#FFFFFF"
-            scale={1.15}
-          />
-        </AdvancedMarker>
+  const targetZoom = hasCustomCoords ? 16 : 13;
 
-        {infoWindowOpen && marker && (
-          <InfoWindow
-            anchor={marker}
-            maxWidth={260}
-            onCloseClick={() => setInfoWindowOpen(false)}
+  return (
+    <div className="relative h-[380px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-[#E8EDF5] shadow-sm sm:h-[440px]">
+      {/* Immediate Google Maps Static thumbnail behind interactive tiles so updates or loading never flash black */}
+      <StaticMapThumbnailLayer
+        apiKey={apiKey}
+        brandName={brandName}
+        addressLabel={addressLabel}
+        center={center}
+        hasCustomCoords={hasCustomCoords}
+      />
+
+      <div
+        className={`relative z-10 h-full w-full transition-opacity duration-300 ${
+          tilesLoaded ? 'opacity-100' : 'opacity-95'
+        }`}
+      >
+        <GoogleMap
+          mapId="DEMO_MAP_ID"
+          renderingType={RenderingType.RASTER}
+          colorScheme={ColorScheme.LIGHT}
+          defaultCenter={center}
+          defaultZoom={targetZoom}
+          gestureHandling="cooperative"
+          disableDefaultUI={false}
+          mapTypeControl={false}
+          streetViewControl={false}
+          fullscreenControl={true}
+          internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
+          style={{width: '100%', height: '100%'}}
+          className="h-full w-full"
+          onTilesLoaded={() => setTilesLoaded(true)}
+        >
+          <MapCameraSync center={center} zoom={targetZoom} />
+
+          <AdvancedMarker
+            ref={markerRef}
+            position={center}
+            title={`${brandName} — ${addressLabel}`}
+            onClick={() => setInfoWindowOpen((prev) => !prev)}
           >
-            <div className="p-1 text-left">
-              <p className="text-xs font-semibold text-[#07090E]">{brandName}</p>
-              <p className="mt-0.5 text-xs text-slate-600">{addressLabel}</p>
-              <a
-                href={googleMapsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#2563EB] hover:underline"
-              >
-                <span>Cómo llegar</span>
-                <ExternalLink className="h-3 w-3" aria-hidden="true" />
-              </a>
-            </div>
-          </InfoWindow>
-        )}
-      </GoogleMap>
+            <Pin
+              background="#2563EB"
+              borderColor="#07090E"
+              glyphColor="#FFFFFF"
+              scale={1.15}
+            />
+          </AdvancedMarker>
+
+          {infoWindowOpen && marker && (
+            <InfoWindow
+              anchor={marker}
+              maxWidth={260}
+              onCloseClick={() => setInfoWindowOpen(false)}
+            >
+              <div className="p-1 text-left">
+                <p className="text-xs font-semibold text-[#07090E]">
+                  {brandName}
+                </p>
+                <p className="mt-0.5 text-xs text-slate-600">{addressLabel}</p>
+                <a
+                  href={googleMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#2563EB] hover:underline"
+                >
+                  <span>Cómo llegar</span>
+                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                </a>
+              </div>
+            </InfoWindow>
+          )}
+        </GoogleMap>
+      </div>
 
       <a
         href={googleMapsUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="absolute right-3 bottom-3 inline-flex items-center gap-2 rounded-lg bg-[#07090E]/92 px-3.5 py-2 text-xs font-semibold text-white shadow-lg backdrop-blur-xs transition-colors hover:bg-[#2563EB] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B82F6]"
+        className="absolute right-3 bottom-3 z-20 inline-flex items-center gap-2 rounded-lg bg-[#2563EB] px-3.5 py-2 text-xs font-semibold text-white shadow-lg transition-colors hover:bg-[#1D4ED8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B82F6]"
       >
-        <Navigation className="h-3.5 w-3.5 text-[#60A5FA]" aria-hidden="true" />
+        <Navigation className="h-3.5 w-3.5" aria-hidden="true" />
         <span>Abrir ruta en Google Maps</span>
       </a>
     </div>
-  );
-}
-
-function FallbackLocationVisual({
-  brandName,
-  addressLabel,
-  center,
-  hasCustomCoords,
-  googleMapsUrl,
-}: InteractiveMapCanvasProps) {
-  return (
-    <a
-      href={googleMapsUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={`Abrir ubicación de ${brandName} en Google Maps`}
-      className="group relative flex h-[380px] w-full flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-[#07090E] p-7 text-white transition-colors hover:border-[#2563EB] sm:h-[440px]"
-    >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-20"
-        style={{
-          backgroundImage:
-            'linear-gradient(to right, rgba(96,165,250,0.22) 1px, transparent 1px), linear-gradient(to bottom, rgba(96,165,250,0.22) 1px, transparent 1px)',
-          backgroundSize: '36px 36px',
-        }}
-      />
-
-      <div className="relative flex items-center justify-between gap-3">
-        <span className="inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-[#60A5FA]">
-          <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>Google Maps · Navegación directa</span>
-        </span>
-        <ExternalLink
-          className="h-4 w-4 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-white"
-          aria-hidden="true"
-        />
-      </div>
-
-      <div className="relative my-auto flex flex-col items-center text-center">
-        <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#2563EB]/20 text-[#60A5FA] ring-1 ring-[#3B82F6]/40 transition-transform group-hover:scale-105">
-          <MapPin className="h-7 w-7" aria-hidden="true" />
-        </span>
-        <p className="mt-4 text-lg font-semibold tracking-tight text-white">
-          {brandName}
-        </p>
-        <p className="mt-1 max-w-sm text-sm text-slate-300">{addressLabel}</p>
-        {hasCustomCoords && (
-          <p className="mt-2 font-mono text-xs text-slate-400">
-            {center.lat.toFixed(5)}, {center.lng.toFixed(5)}
-          </p>
-        )}
-      </div>
-
-      <div className="relative flex items-center justify-center">
-        <span className="inline-flex items-center gap-2 rounded-lg bg-[#2563EB] px-5 py-2.5 text-xs font-semibold text-white transition-colors group-hover:bg-[#1D4ED8]">
-          <Navigation className="h-4 w-4" aria-hidden="true" />
-          <span>Toca aquí para ver cómo llegar</span>
-        </span>
-      </div>
-    </a>
   );
 }
 
@@ -192,7 +365,11 @@ export function LocationSection({
   onEditLocation,
 }: LocationSectionProps) {
   const apiKey = getGoogleMapsApiKey();
-  const nav = useMemo(() => buildNavigationLinks(config), [config]);
+  const [resolvedCoords, setResolvedCoords] = useState<GeoCoords | null>(null);
+  const nav = useMemo(
+    () => buildNavigationLinks(config, resolvedCoords),
+    [config, resolvedCoords]
+  );
 
   const kicker = config.locationKicker?.trim() || 'Ubicación · Cómo llegar';
   const title =
@@ -200,6 +377,9 @@ export function LocationSection({
   const description =
     config.locationDescription?.trim() ||
     'Consulta nuestra ubicación en Google Maps y toca cualquiera de los accesos para abrir indicaciones paso a paso en tu aplicación de navegación preferida.';
+
+  const searchQueryForResolution =
+    config.locationAddress?.trim() || nav.urlPlaceQuery || '';
 
   return (
     <section
@@ -301,25 +481,26 @@ export function LocationSection({
             </div>
           </div>
 
-          {/* Right Panel: Interactive Google Map */}
+          {/* Right Panel: Interactive Google Map + Guaranteed Static Map Thumbnail */}
           <div className="lg:col-span-7">
             {apiKey ? (
-              <APIProvider
-                apiKey={apiKey}
-                language="es"
-                region="SV"
-                libraries={['marker', 'places']}
-              >
+              <MapsApiProvider>
                 <InteractiveMapCanvas
+                  apiKey={apiKey}
                   brandName={config.brandName}
                   addressLabel={nav.queryLabel}
                   center={nav.center}
                   hasCustomCoords={nav.hasCustomCoords}
+                  explicitCustomCoords={nav.explicitCustomCoords}
+                  customMapsUrl={config.locationMapsUrl?.trim() || ''}
                   googleMapsUrl={nav.googleMapsUrl}
+                  searchQueryForResolution={searchQueryForResolution}
+                  onResolvedCoords={setResolvedCoords}
                 />
-              </APIProvider>
+              </MapsApiProvider>
             ) : (
               <FallbackLocationVisual
+                apiKey=""
                 brandName={config.brandName}
                 addressLabel={nav.queryLabel}
                 center={nav.center}

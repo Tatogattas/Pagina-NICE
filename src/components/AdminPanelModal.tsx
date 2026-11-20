@@ -1,3 +1,4 @@
+import {useMapsLibrary} from '@vis.gl/react-google-maps';
 import type {User} from 'firebase/auth';
 import {signInWithPopup} from 'firebase/auth';
 import {
@@ -16,6 +17,7 @@ import {
   Play,
   Plus,
   RotateCcw,
+  Search,
   Send,
   Trash2,
   X,
@@ -47,6 +49,11 @@ import {
 } from '../services/contactRoutingService';
 import {
   buildNavigationLinks,
+  buildStaticMapThumbnailUrl,
+  DEFAULT_REFERENCE_CENTER,
+  extractGoogleMapsQuery,
+  getGoogleMapsApiKey,
+  hasValidCoordinates,
   parseGoogleMapsCoordinates,
 } from '../utils/mapsLinks';
 import {BrandLogo} from './BrandLogo';
@@ -84,7 +91,11 @@ export function AdminPanelModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
+  const [locatingAddress, setLocatingAddress] = useState(false);
+  const [thumbFailedUrl, setThumbFailedUrl] = useState('');
   const [inquiries, setInquiries] = useState<StoredContactInquiry[]>([]);
+  const placesLib = useMapsLibrary('places');
+  const mapsApiKey = getGoogleMapsApiKey();
 
   // Add / edit single gallery item form
   const [selectedItemId, setSelectedItemId] = useState<string | null>(
@@ -304,6 +315,63 @@ export function AdminPanelModal({
       },
       {enableHighAccuracy: true, timeout: 8000}
     );
+  };
+
+  const handleLookupPlaceOnMap = async (explicitQuery?: string) => {
+    setErrorMsg(null);
+    const query = (
+      explicitQuery ||
+      draft.locationAddress ||
+      extractGoogleMapsQuery(draft.locationMapsUrl ?? '') ||
+      ''
+    ).trim();
+    if (!query) {
+      setErrorMsg('Escribe una dirección o pega un enlace de Google Maps para ubicar.');
+      return;
+    }
+    if (!placesLib) {
+      setErrorMsg(
+        'El servicio de búsqueda de mapas está cargando. Ingresa coordenadas o espera un segundo.'
+      );
+      return;
+    }
+    setLocatingAddress(true);
+    try {
+      const res = await placesLib.Place.searchByText({
+        textQuery: query,
+        fields: ['location', 'formattedAddress'],
+        region: 'SV',
+      });
+      const place = res.places?.[0];
+      if (!place?.location) {
+        setErrorMsg(
+          'No se encontró ese lugar en Google Maps. Prueba con una dirección más específica o usa coordenadas GPS.'
+        );
+        return;
+      }
+      setDraft((prev) => ({
+        ...prev,
+        locationAddress:
+          prev.locationAddress?.trim() || place.formattedAddress || query,
+        locationLat: Number(place.location!.lat().toFixed(6)),
+        locationLng: Number(place.location!.lng().toFixed(6)),
+      }));
+      flashSaved('Ubicación encontrada en Google Maps. Guarda para publicarla.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (
+        msg.includes('RESOURCE_EXHAUSTED') ||
+        msg.includes('OVER_QUERY_LIMIT') ||
+        msg.includes('429')
+      ) {
+        window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
+        setErrorMsg('Se alcanzó el límite temporal de consultas de Google Maps.');
+      } else {
+        setErrorMsg('No se pudo consultar la dirección en Google Maps.');
+      }
+    } finally {
+      setLocatingAddress(false);
+    }
   };
 
   const handleSaveLocation = async (e: FormEvent) => {
@@ -1674,16 +1742,27 @@ export function AdminPanelModal({
                 <label className="block text-xs font-semibold text-[#07090E]">
                   Dirección visible de la clínica
                 </label>
-                <input
-                  type="text"
-                  maxLength={240}
-                  value={draft.locationAddress ?? ''}
-                  onChange={(e) =>
-                    setDraft({...draft, locationAddress: e.target.value})
-                  }
-                  placeholder="Colonia Escalón, Calle..., San Salvador"
-                  className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
-                />
+                <div className="mt-1.5 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="text"
+                    maxLength={240}
+                    value={draft.locationAddress ?? ''}
+                    onChange={(e) =>
+                      setDraft({...draft, locationAddress: e.target.value})
+                    }
+                    placeholder="Colonia Escalón, Calle..., San Salvador"
+                    className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled={locatingAddress}
+                    onClick={() => void handleLookupPlaceOnMap()}
+                    className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-[#07090E] transition-colors hover:border-[#2563EB] hover:text-[#2563EB] disabled:opacity-60"
+                  >
+                    <Search className="h-3.5 w-3.5 text-[#2563EB]" aria-hidden="true" />
+                    <span>{locatingAddress ? 'Buscando...' : 'Ubicar en mapa'}</span>
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -1764,6 +1843,74 @@ export function AdminPanelModal({
                     <span>Usar GPS actual</span>
                   </button>
                 </div>
+
+                {/* Live Google Maps Thumbnail Preview */}
+                {(() => {
+                  const hasCoords = hasValidCoordinates(
+                    draft.locationLat,
+                    draft.locationLng
+                  );
+                  const previewNav = buildNavigationLinks(draft);
+                  const previewCenter = hasCoords
+                    ? {
+                        lat: draft.locationLat as number,
+                        lng: draft.locationLng as number,
+                      }
+                    : DEFAULT_REFERENCE_CENTER;
+                  const thumbUrl = buildStaticMapThumbnailUrl({
+                    apiKey: mapsApiKey,
+                    center: previewCenter,
+                    hasCustomCoords: hasCoords,
+                    queryLabel: previewNav.queryLabel,
+                    zoom: hasCoords ? 16 : 13,
+                    size: '640x240',
+                  });
+                  const canRenderThumb =
+                    Boolean(thumbUrl) && thumbFailedUrl !== thumbUrl;
+
+                  return (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-semibold text-[#07090E]">
+                        Miniatura de Google Maps (vista previa en vivo)
+                      </p>
+                      <div className="relative h-44 w-full overflow-hidden rounded-xl border border-slate-200 bg-[#E8EDF5]">
+                        {canRenderThumb ? (
+                          <img
+                            key={thumbUrl}
+                            src={thumbUrl}
+                            alt={`Miniatura de Google Maps para ${previewNav.queryLabel}`}
+                            decoding="async"
+                            onError={() => setThumbFailedUrl(thumbUrl)}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div
+                            className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-[#EEF3FA] px-4 text-center text-[#07090E]"
+                            style={{
+                              backgroundImage:
+                                'linear-gradient(to right, rgba(37,99,235,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(37,99,235,0.12) 1px, transparent 1px)',
+                              backgroundSize: '28px 28px',
+                            }}
+                          >
+                            <MapPin
+                              className="h-5 w-5 text-[#2563EB]"
+                              aria-hidden="true"
+                            />
+                            <p className="text-xs font-semibold">
+                              {previewNav.queryLabel}
+                            </p>
+                            {hasCoords && (
+                              <p className="font-mono text-[11px] text-slate-600">
+                                {previewCenter.lat.toFixed(5)},{' '}
+                                {previewCenter.lng.toFixed(5)}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3">
