@@ -173,17 +173,20 @@ export function subscribeToSiteContent(
             ? data.whatsappWebhookUrl
             : '',
         locationMapsUrl:
-          typeof data.locationMapsUrl === 'string' ? data.locationMapsUrl : '',
+          typeof data.locationMapsUrl === 'string' &&
+          data.locationMapsUrl.trim()
+            ? data.locationMapsUrl
+            : DEFAULT_SITE_CONFIG.locationMapsUrl || '',
         locationLat:
           typeof data.locationLat === 'number' &&
           Number.isFinite(data.locationLat)
             ? data.locationLat
-            : null,
+            : (DEFAULT_SITE_CONFIG.locationLat ?? null),
         locationLng:
           typeof data.locationLng === 'number' &&
           Number.isFinite(data.locationLng)
             ? data.locationLng
-            : null,
+            : (DEFAULT_SITE_CONFIG.locationLng ?? null),
         heroPillars: Array.isArray(data.heroPillars)
           ? data.heroPillars
           : DEFAULT_SITE_CONFIG.heroPillars,

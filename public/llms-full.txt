@@ -20,7 +20,7 @@
 - **Correo administrativo vinculado:** taroret134@gmail.com
 - **WhatsApp emisor oficial:** +503 60431208
 - **Líneas de atención por turnos (round-robin):** +503 61631237 (Turno 1), +503 79007071 (Turno 2), +503 75437670 (Turno 3).
-- **Cómo llegar:** Disponible en la pestaña y sección `#ubicacion` mediante mapa interactivo de Google Maps y enlaces directos para abrir navegación paso a paso en Google Maps, Waze o Apple Maps.
+- **Cómo llegar:** Disponible en `#ubicacion` (`https://maps.app.goo.gl/Fk8w4Ynbwp6CnurV7`, coordenadas `13.67923, -89.192044`) mediante foto estática de Google Maps y enlaces directos para abrir navegación paso a paso en Google Maps, Waze o Apple Maps.
 
 ## Preguntas y respuestas verificables (AEO / Voice Search)
 - **¿Para quién es Academia/Clínica NICE?** Tanto para personas que buscan recuperar movilidad sin dolor como para quienes desean fuerza funcional y acondicionamiento paleo guiado.

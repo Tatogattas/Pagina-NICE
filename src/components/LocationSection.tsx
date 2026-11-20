@@ -75,7 +75,7 @@ function StaticMapThumbnailLayer({
         center,
         hasCustomCoords,
         queryLabel: addressLabel,
-        zoom: hasCustomCoords ? 16 : 13,
+        zoom: hasCustomCoords ? 17 : 15,
         size: '640x440',
       }),
     [apiKey, center.lat, center.lng, hasCustomCoords, addressLabel]
@@ -102,7 +102,7 @@ function StaticMapThumbnailLayer({
     <img
       key={staticUrl}
       src={staticUrl}
-      alt={`Miniatura de Google Maps de ${brandName} (${addressLabel})`}
+      alt={`Foto estática de Google Maps de ${brandName} (${addressLabel})`}
       decoding="async"
       onError={() => setFailedUrl(staticUrl)}
       className="pointer-events-none absolute inset-0 h-full w-full object-cover"
@@ -110,22 +110,21 @@ function StaticMapThumbnailLayer({
   );
 }
 
-function FallbackLocationVisual({
+interface StaticLocationPhotoCardProps extends LocationVisualProps {
+  onEnableInteractive?: () => void;
+}
+
+function StaticLocationPhotoCard({
   apiKey,
   brandName,
   addressLabel,
   center,
   hasCustomCoords,
   googleMapsUrl,
-}: LocationVisualProps) {
+  onEnableInteractive,
+}: StaticLocationPhotoCardProps) {
   return (
-    <a
-      href={googleMapsUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={`Abrir ubicación de ${brandName} en Google Maps`}
-      className="group relative flex h-[380px] w-full flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-[#E8EDF5] p-6 text-[#07090E] shadow-sm transition-colors hover:border-[#2563EB] sm:h-[440px]"
-    >
+    <div className="group relative flex h-[380px] w-full flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-[#E8EDF5] p-4 text-[#07090E] shadow-sm transition-colors hover:border-[#2563EB] sm:h-[440px] sm:p-5">
       <StaticMapThumbnailLayer
         apiKey={apiKey}
         brandName={brandName}
@@ -134,22 +133,49 @@ function FallbackLocationVisual({
         hasCustomCoords={hasCustomCoords}
       />
 
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-gradient-to-t from-white/95 via-white/25 to-white/75"
+      <a
+        href={googleMapsUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`Abrir ubicación de ${brandName} en Google Maps`}
+        className="absolute inset-0 z-10"
       />
 
-      <div className="relative flex items-center justify-between gap-3">
+      <div className="pointer-events-none relative z-20 flex flex-wrap items-center justify-between gap-2">
         <span className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white/95 px-3 py-1.5 text-xs font-semibold text-[#07090E] shadow-xs">
           <MapPin className="h-3.5 w-3.5 text-[#2563EB]" aria-hidden="true" />
-          <span>Google Maps · Navegación directa</span>
+          <span>Google Maps · Vista estática</span>
         </span>
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white/95 text-[#07090E] shadow-xs transition-colors group-hover:border-[#2563EB] group-hover:text-[#2563EB]">
-          <ExternalLink className="h-4 w-4" aria-hidden="true" />
-        </span>
+
+        <div className="pointer-events-auto flex items-center gap-2">
+          {onEnableInteractive && (
+            <button
+              type="button"
+              onClick={onEnableInteractive}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/95 px-3 py-1.5 text-xs font-semibold text-[#07090E] shadow-xs transition-colors hover:border-[#2563EB] hover:text-[#2563EB]"
+            >
+              <Compass className="h-3.5 w-3.5 text-[#2563EB]" aria-hidden="true" />
+              <span>Mapa interactivo</span>
+            </button>
+          )}
+          <a
+            href={googleMapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Abrir ${brandName} en Google Maps`}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white/95 text-[#07090E] shadow-xs transition-colors hover:border-[#2563EB] hover:text-[#2563EB]"
+          >
+            <ExternalLink className="h-4 w-4" aria-hidden="true" />
+          </a>
+        </div>
       </div>
 
-      <div className="relative mt-auto flex flex-col gap-3 rounded-xl border border-slate-200 bg-white/95 p-4 shadow-md backdrop-blur-xs sm:flex-row sm:items-center sm:justify-between">
+      <a
+        href={googleMapsUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="relative z-20 mt-auto flex flex-col gap-3 rounded-xl border border-slate-200 bg-white/95 p-4 shadow-md backdrop-blur-xs transition-colors hover:border-[#2563EB] sm:flex-row sm:items-center sm:justify-between"
+      >
         <div className="min-w-0">
           <p className="text-sm font-semibold text-[#07090E]">{brandName}</p>
           <p className="mt-0.5 truncate text-xs text-slate-600">{addressLabel}</p>
@@ -163,8 +189,8 @@ function FallbackLocationVisual({
           <Navigation className="h-3.5 w-3.5" aria-hidden="true" />
           <span>Cómo llegar</span>
         </span>
-      </div>
-    </a>
+      </a>
+    </div>
   );
 }
 
@@ -173,6 +199,7 @@ interface InteractiveMapCanvasProps extends LocationVisualProps {
   customMapsUrl: string;
   searchQueryForResolution: string;
   onResolvedCoords: (coords: GeoCoords | null) => void;
+  onShowStaticPhoto: () => void;
 }
 
 function InteractiveMapCanvas({
@@ -185,6 +212,7 @@ function InteractiveMapCanvas({
   googleMapsUrl,
   searchQueryForResolution,
   onResolvedCoords,
+  onShowStaticPhoto,
 }: InteractiveMapCanvasProps) {
   const status = useApiLoadingStatus();
   const placesLib = useMapsLibrary('places');
@@ -223,15 +251,16 @@ function InteractiveMapCanvas({
             location?: {lat: () => number; lng: () => number} | null;
           }>;
         }) => {
-        if (cancelled) return;
-        const loc = res.places?.[0]?.location;
-        if (loc) {
-          onResolvedCoords({
-            lat: Number(loc.lat().toFixed(6)),
-            lng: Number(loc.lng().toFixed(6)),
-          });
+          if (cancelled) return;
+          const loc = res.places?.[0]?.location;
+          if (loc) {
+            onResolvedCoords({
+              lat: Number(loc.lat().toFixed(6)),
+              lng: Number(loc.lng().toFixed(6)),
+            });
+          }
         }
-      })
+      )
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
         if (
@@ -259,7 +288,7 @@ function InteractiveMapCanvas({
     status === APILoadingStatus.AUTH_FAILURE
   ) {
     return (
-      <FallbackLocationVisual
+      <StaticLocationPhotoCard
         apiKey={apiKey}
         brandName={brandName}
         addressLabel={addressLabel}
@@ -270,7 +299,7 @@ function InteractiveMapCanvas({
     );
   }
 
-  const targetZoom = hasCustomCoords ? 16 : 13;
+  const targetZoom = hasCustomCoords ? 17 : 15;
 
   return (
     <div className="relative h-[380px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-[#E8EDF5] shadow-sm sm:h-[440px]">
@@ -346,6 +375,15 @@ function InteractiveMapCanvas({
         </GoogleMap>
       </div>
 
+      <button
+        type="button"
+        onClick={onShowStaticPhoto}
+        className="absolute top-3 left-3 z-20 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/95 px-3 py-1.5 text-xs font-semibold text-[#07090E] shadow-xs transition-colors hover:border-[#2563EB] hover:text-[#2563EB]"
+      >
+        <MapPin className="h-3.5 w-3.5 text-[#2563EB]" aria-hidden="true" />
+        <span>Ver foto estática</span>
+      </button>
+
       <a
         href={googleMapsUrl}
         target="_blank"
@@ -366,6 +404,7 @@ export function LocationSection({
 }: LocationSectionProps) {
   const apiKey = getGoogleMapsApiKey();
   const [resolvedCoords, setResolvedCoords] = useState<GeoCoords | null>(null);
+  const [showInteractiveMap, setShowInteractiveMap] = useState(false);
   const nav = useMemo(
     () => buildNavigationLinks(config, resolvedCoords),
     [config, resolvedCoords]
@@ -481,9 +520,9 @@ export function LocationSection({
             </div>
           </div>
 
-          {/* Right Panel: Interactive Google Map + Guaranteed Static Map Thumbnail */}
+          {/* Right Panel: Default Static Google Maps Photo with Optional Interactive Toggle */}
           <div className="lg:col-span-7">
-            {apiKey ? (
+            {apiKey && showInteractiveMap ? (
               <MapsApiProvider>
                 <InteractiveMapCanvas
                   apiKey={apiKey}
@@ -496,16 +535,20 @@ export function LocationSection({
                   googleMapsUrl={nav.googleMapsUrl}
                   searchQueryForResolution={searchQueryForResolution}
                   onResolvedCoords={setResolvedCoords}
+                  onShowStaticPhoto={() => setShowInteractiveMap(false)}
                 />
               </MapsApiProvider>
             ) : (
-              <FallbackLocationVisual
-                apiKey=""
+              <StaticLocationPhotoCard
+                apiKey={apiKey}
                 brandName={config.brandName}
                 addressLabel={nav.queryLabel}
                 center={nav.center}
                 hasCustomCoords={nav.hasCustomCoords}
                 googleMapsUrl={nav.googleMapsUrl}
+                onEnableInteractive={
+                  apiKey ? () => setShowInteractiveMap(true) : undefined
+                }
               />
             )}
           </div>

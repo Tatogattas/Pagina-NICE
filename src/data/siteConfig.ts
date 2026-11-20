@@ -118,9 +118,9 @@ export const DEFAULT_SITE_CONFIG: SiteContentConfig = {
   locationDescription:
     'Explora nuestra ubicación en Google Maps y toca el marcador o los botones de ruta para abrir indicaciones paso a paso en Google Maps, Waze o Apple Maps.',
   locationAddress: 'Academia/Clínica NICE · Sede Central, El Salvador',
-  locationMapsUrl: '',
-  locationLat: null,
-  locationLng: null,
+  locationMapsUrl: 'https://maps.app.goo.gl/Fk8w4Ynbwp6CnurV7',
+  locationLat: 13.67923,
+  locationLng: -89.192044,
   whatsappWebhookUrl: '',
   footerTagline:
     'Academia/Clínica NICE — Ejercicios paleo, movilidad natural y clínica funcional.',

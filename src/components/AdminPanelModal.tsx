@@ -1809,7 +1809,7 @@ export function AdminPanelModal({
                           locationLat: raw === '' ? null : Number(raw),
                         });
                       }}
-                      placeholder="13.6929"
+                      placeholder="13.67923"
                       className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
                     />
                   </div>
@@ -1830,7 +1830,7 @@ export function AdminPanelModal({
                           locationLng: raw === '' ? null : Number(raw),
                         });
                       }}
-                      placeholder="-89.2182"
+                      placeholder="-89.192044"
                       className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
                     />
                   </div>
@@ -1862,7 +1862,7 @@ export function AdminPanelModal({
                     center: previewCenter,
                     hasCustomCoords: hasCoords,
                     queryLabel: previewNav.queryLabel,
-                    zoom: hasCoords ? 16 : 13,
+                    zoom: hasCoords ? 17 : 15,
                     size: '640x240',
                   });
                   const canRenderThumb =

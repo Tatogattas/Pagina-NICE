@@ -6,8 +6,8 @@ export interface GeoCoords {
 }
 
 export const DEFAULT_REFERENCE_CENTER: GeoCoords = {
-  lat: 13.6929,
-  lng: -89.2182,
+  lat: 13.67923,
+  lng: -89.192044,
 };
 
 export function getGoogleMapsApiKey(): string {
@@ -159,7 +159,7 @@ export function buildStaticMapThumbnailUrl({
       ? `${center.lat.toFixed(6)},${center.lng.toFixed(6)}`
       : queryLabel.trim();
 
-  const resolvedZoom = zoom ?? (hasCustomCoords ? 16 : 13);
+  const resolvedZoom = zoom ?? (hasCustomCoords ? 17 : 15);
 
   const params = new URLSearchParams();
   params.set('center', locationTarget);
@@ -170,6 +170,7 @@ export function buildStaticMapThumbnailUrl({
   params.set('language', 'es');
   params.set('region', 'SV');
   params.set('markers', `color:0x2563EB|${locationTarget}`);
+  params.set('solution_id', 'gmp_git_agentskills_v1');
   params.set('key', cleanKey);
 
   return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
@@ -180,7 +181,7 @@ export function parseGoogleMapsCoordinates(input: string): GeoCoords | null {
   if (!text) return null;
 
   // Pattern 1: @lat,lng (Google Maps share URLs)
-  const atMatch = text.match(/@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
+  const atMatch = text.match(/@(-?\d+(?:\.\d+)?),\s*\+?\s*(-?\d+(?:\.\d+)?)/);
   if (atMatch) {
     const lat = Number.parseFloat(atMatch[1]);
     const lng = Number.parseFloat(atMatch[2]);
@@ -192,7 +193,7 @@ export function parseGoogleMapsCoordinates(input: string): GeoCoords | null {
   // Pattern 2: q=lat,lng | query=lat,lng | ll=lat,lng | sll=lat,lng | center=lat,lng | destination=lat,lng | daddr=lat,lng | !3dlat!4dlng
   const paramMatch =
     text.match(
-      /(?:[?&](?:q|query|ll|sll|center|destination|daddr)=)(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/
+      /(?:[?&](?:q|query|ll|sll|center|destination|daddr)=)(-?\d+(?:\.\d+)?),\s*\+?\s*(-?\d+(?:\.\d+)?)/
     ) || text.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
   if (paramMatch) {
     const lat = Number.parseFloat(paramMatch[1]);
@@ -202,9 +203,9 @@ export function parseGoogleMapsCoordinates(input: string): GeoCoords | null {
     }
   }
 
-  // Pattern 3: /maps/place/.../lat,lng or /maps/dir/.../lat,lng
+  // Pattern 3: /maps/place/.../lat,lng or /maps/dir/.../lat,lng or /maps/search/lat,+-lng
   const pathCoordMatch = text.match(
-    /\/(?:place|dir|search)\/(?:[^/]+\/)*(-?\d+\.\d+),\s*(-?\d+\.\d+)/
+    /\/(?:place|dir|search)\/(?:[^/]+\/)*(-?\d+\.\d+),\s*\+?\s*(-?\d+\.\d+)/
   );
   if (pathCoordMatch) {
     const lat = Number.parseFloat(pathCoordMatch[1]);
@@ -215,7 +216,7 @@ export function parseGoogleMapsCoordinates(input: string): GeoCoords | null {
   }
 
   // Pattern 4: plain "lat, lng"
-  const plainMatch = text.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+  const plainMatch = text.match(/^(-?\d+(?:\.\d+)?)\s*,\s*\+?\s*(-?\d+(?:\.\d+)?)$/);
   if (plainMatch) {
     const lat = Number.parseFloat(plainMatch[1]);
     const lng = Number.parseFloat(plainMatch[2]);
