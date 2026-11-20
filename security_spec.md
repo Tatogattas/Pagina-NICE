@@ -7,6 +7,7 @@
 4. Video URLs must begin with `http://` or `https://`, optional `logoUrl` must be empty or begin with `http://` or `https://`, optional `whatsappWebhookUrl` and `locationMapsUrl` must be empty or begin with `https://` (max 1000 chars), and optional `locationLat`/`locationLng` must be numeric within valid geographic bounds (`[-90, 90]` and `[-180, 180]`) or `null`.
 5. `/contactRouting/roundRobin` stores only an integer `turnCount` and server `updatedAt` timestamp (zero PII) and can only increment sequentially by `+1` (`incoming().turnCount == existing().turnCount + 1`) on update or initialize at `1`.
 6. `/contactInquiries/{inquiryId}` accepts validated public `create` submissions (with strict key allowlist, string length bounds, `senderWhatsapp == "+503 60431208"`, valid WhatsApp turn slot allowlist, `dispatched == false`, and `createdAt == request.time`), allows only `isAdmin()` to `get`, `list`, `delete`, or `update` strictly the `dispatched` flag (preserving all other fields immutable).
+7. `/ctaLocks/{lockId}` stores only SHA-256 hashed device/IP keys (`deviceKey == lockId`, zero raw IP PII) and numeric epoch/timestamps; public visitors may only `get` their own key or `create` with `adminUnlocked == false`, cannot `list` or `delete`, and cannot overwrite `firstSeenAtMs` unless `epoch` matches a newer admin-published `siteContent/main.ctaAdminUnlockEpoch`.
 
 ## 2. Dirty Dozen Adversarial Payloads (Must Return PERMISSION_DENIED)
 1. Unauthenticated `create`/`update` on `/siteContent/main`.
@@ -20,4 +21,4 @@
 9. Admin writing `galleryItems` with > 50 elements (Denial of Wallet array guard).
 10. Admin writing `galleryItems: ["not-a-map"]` (fails `galleryItems[0] is map` guard).
 11. Unauthenticated or non-admin user attempting `get`/`list`/`update` on `/contactInquiries`, or public user creating an inquiry with `dispatched: true`.
-12. Poisoned document ID `contentId` exceeding 128 chars or containing invalid characters on `/siteContent/{contentId}`, or resetting `turnCount` backwards on `/contactRouting/roundRobin`.
+12. Poisoned document ID `contentId` exceeding 128 chars or containing invalid characters on `/siteContent/{contentId}`, resetting `turnCount` backwards on `/contactRouting/roundRobin`, or a visitor setting `adminUnlocked: true` / backdating `firstSeenAtMs` on `/ctaLocks/{lockId}`.

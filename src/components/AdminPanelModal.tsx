@@ -20,6 +20,7 @@ import {
   Search,
   Send,
   Trash2,
+  Unlock,
   X,
 } from 'lucide-react';
 import {useEffect, useMemo, useRef, useState, type FormEvent} from 'react';
@@ -48,6 +49,12 @@ import {
   type StoredContactInquiry,
 } from '../services/contactRoutingService';
 import {
+  adminResetDeviceLock,
+  adminUnlockDeviceLock,
+  subscribeToAdminCtaLocks,
+  type AdminCtaLockEntry,
+} from '../services/ctaLockService';
+import {
   buildNavigationLinks,
   buildStaticMapThumbnailUrl,
   DEFAULT_REFERENCE_CENTER,
@@ -71,6 +78,8 @@ interface AdminPanelModalProps {
   onPublishConfig: (next: SiteContentConfig) => Promise<void>;
   onResetConfig: () => Promise<void>;
   onLogout: () => void;
+  onUnlockAllCtaNow: () => Promise<void>;
+  onResetLocalCtaLock: () => Promise<void>;
 }
 
 export function AdminPanelModal({
@@ -84,6 +93,8 @@ export function AdminPanelModal({
   onPublishConfig,
   onResetConfig,
   onLogout,
+  onUnlockAllCtaNow,
+  onResetLocalCtaLock,
 }: AdminPanelModalProps) {
   const [activeTab, setActiveTab] = useState<EditorTab>(initialTab);
   const [draft, setDraft] = useState<SiteContentConfig>(config);
@@ -94,6 +105,7 @@ export function AdminPanelModal({
   const [locatingAddress, setLocatingAddress] = useState(false);
   const [thumbFailedUrl, setThumbFailedUrl] = useState('');
   const [inquiries, setInquiries] = useState<StoredContactInquiry[]>([]);
+  const [ctaLocks, setCtaLocks] = useState<AdminCtaLockEntry[]>([]);
   const placesLib = useMapsLibrary('places');
   const mapsApiKey = getGoogleMapsApiKey();
 
@@ -169,12 +181,19 @@ export function AdminPanelModal({
   useEffect(() => {
     if (!isOpen || !firebaseUser) {
       setInquiries([]);
+      setCtaLocks([]);
       return;
     }
-    const unsub = subscribeToContactInquiries((items) => {
+    const unsubInquiries = subscribeToContactInquiries((items) => {
       setInquiries(items);
     });
-    return () => unsub();
+    const unsubLocks = subscribeToAdminCtaLocks((locks) => {
+      setCtaLocks(locks);
+    });
+    return () => {
+      unsubInquiries();
+      unsubLocks();
+    };
   }, [isOpen, firebaseUser]);
 
   if (!isOpen) return null;
@@ -990,6 +1009,189 @@ export function AdminPanelModal({
                     className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs focus:border-[#2563EB] focus:outline-none"
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#07090E]">
+                    Texto del botón rojo destacado hacia Contacto (antes de la galería)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={100}
+                    value={draft.galleryJumpCtaLabel ?? ''}
+                    onChange={(e) =>
+                      setDraft({...draft, galleryJumpCtaLabel: e.target.value})
+                    }
+                    placeholder="Agenda tu valoración · Ir a Contacto"
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs focus:border-[#2563EB] focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-3 rounded-lg border border-red-200 bg-white p-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-[#07090E]">
+                      Temporizador de bloqueo por IP de dispositivo
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={saving || connectingGoogle}
+                        onClick={() => {
+                          setSaving(true);
+                          void onUnlockAllCtaNow()
+                            .then(() =>
+                              flashSaved(
+                                'Botón rojo desbloqueado inmediatamente.'
+                              )
+                            )
+                            .finally(() => setSaving(false));
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#DC2626] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#B91C1C] disabled:opacity-60"
+                      >
+                        <Unlock className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>Desbloquear ahora</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => {
+                          void onResetLocalCtaLock().then(() =>
+                            flashSaved(
+                              'Temporizador reiniciado en este dispositivo.'
+                            )
+                          );
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-[#07090E] transition-colors hover:border-[#2563EB] hover:text-[#2563EB]"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>Reiniciar prueba</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700">
+                        Segundos para bloquearse tras entrar (5 - 3600)
+                      </label>
+                      <input
+                        type="number"
+                        min={5}
+                        max={3600}
+                        step={1}
+                        value={draft.ctaLockDelaySeconds ?? 30}
+                        onChange={(e) => {
+                          const num = Number(e.target.value);
+                          setDraft({
+                            ...draft,
+                            ctaLockDelaySeconds: Number.isFinite(num)
+                              ? num
+                              : 30,
+                          });
+                        }}
+                        className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs focus:border-[#2563EB] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700">
+                        Segundos bloqueado hasta desbloqueo (60 = 1 min)
+                      </label>
+                      <input
+                        type="number"
+                        min={10}
+                        max={3600}
+                        step={1}
+                        value={draft.ctaUnlockCooldownSeconds ?? 60}
+                        onChange={(e) => {
+                          const num = Number(e.target.value);
+                          setDraft({
+                            ...draft,
+                            ctaUnlockCooldownSeconds: Number.isFinite(num)
+                              ? num
+                              : 60,
+                          });
+                        }}
+                        className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs focus:border-[#2563EB] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {firebaseUser && ctaLocks.length > 0 && (
+                    <div className="space-y-1.5 border-t border-slate-200 pt-2.5">
+                      <p className="text-[11px] font-semibold text-slate-500">
+                        Dispositivos / IP registrados ({ctaLocks.length})
+                      </p>
+                      <div className="max-h-36 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
+                        {ctaLocks.map((lock) => {
+                          const delayMs =
+                            Math.max(5, draft.ctaLockDelaySeconds ?? 30) * 1000;
+                          const cooldownMs =
+                            Math.max(10, draft.ctaUnlockCooldownSeconds ?? 60) *
+                            1000;
+                          const cycleMs = delayMs + cooldownMs;
+                          const elapsed = Math.max(
+                            0,
+                            Date.now() - lock.firstSeenAtMs
+                          );
+                          const cyclePos = elapsed % cycleMs;
+                          const isCurrentlyLocked =
+                            !lock.adminUnlocked &&
+                            lock.epoch >= (config.ctaAdminUnlockEpoch ?? 0) &&
+                            cyclePos >= delayMs;
+                          return (
+                            <div
+                              key={lock.deviceKey}
+                              className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs"
+                            >
+                              <div className="min-w-0">
+                                <span className="font-mono text-[11px] text-[#07090E]">
+                                  {lock.deviceKey.slice(0, 14)}…
+                                </span>{' '}
+                                <span
+                                  className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                    isCurrentlyLocked
+                                      ? 'bg-red-100 text-red-700'
+                                      : 'bg-emerald-50 text-emerald-700'
+                                  }`}
+                                >
+                                  {lock.adminUnlocked
+                                    ? 'Desbloqueado por admin'
+                                    : isCurrentlyLocked
+                                      ? 'Bloqueado'
+                                      : 'Activo / Libre'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                {!lock.adminUnlocked && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void adminUnlockDeviceLock(
+                                        lock.deviceKey,
+                                        config.ctaAdminUnlockEpoch ?? 0
+                                      )
+                                    }
+                                    className="rounded bg-[#2563EB] px-2 py-1 text-[11px] font-semibold text-white hover:bg-[#1D4ED8]"
+                                  >
+                                    Desbloquear
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void adminResetDeviceLock(lock.deviceKey)
+                                  }
+                                  className="rounded border border-slate-300 px-2 py-1 text-[11px] font-medium text-slate-600 hover:text-red-600"
+                                >
+                                  Reiniciar
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <textarea
                   rows={2}
                   maxLength={600}

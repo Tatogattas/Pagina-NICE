@@ -54,6 +54,28 @@ export function sanitizeSiteConfig(
         title: clampStr(p.title, 120),
         description: clampStr(p.description, 400),
       })),
+    galleryJumpCtaLabel:
+      clampStr(
+        raw.galleryJumpCtaLabel ?? DEFAULT_SITE_CONFIG.galleryJumpCtaLabel ?? '',
+        100
+      ) ||
+      DEFAULT_SITE_CONFIG.galleryJumpCtaLabel ||
+      'Agenda tu valoración · Ir a Contacto',
+    ctaLockDelaySeconds: (() => {
+      const val = Number(raw.ctaLockDelaySeconds);
+      if (!Number.isFinite(val)) return DEFAULT_SITE_CONFIG.ctaLockDelaySeconds ?? 30;
+      return Math.min(3600, Math.max(5, Math.round(val)));
+    })(),
+    ctaUnlockCooldownSeconds: (() => {
+      const val = Number(raw.ctaUnlockCooldownSeconds);
+      if (!Number.isFinite(val)) return DEFAULT_SITE_CONFIG.ctaUnlockCooldownSeconds ?? 60;
+      return Math.min(3600, Math.max(10, Math.round(val)));
+    })(),
+    ctaAdminUnlockEpoch: (() => {
+      const val = Number(raw.ctaAdminUnlockEpoch);
+      if (!Number.isFinite(val) || val < 0) return 0;
+      return Math.min(9999999999999, Math.round(val));
+    })(),
     galleryKicker: clampStr(raw.galleryKicker, 120),
     galleryTitle: clampStr(raw.galleryTitle, 200, DEFAULT_SITE_CONFIG.galleryTitle) || DEFAULT_SITE_CONFIG.galleryTitle,
     galleryDescription: clampStr(raw.galleryDescription, 600),
@@ -193,6 +215,29 @@ export function subscribeToSiteContent(
         galleryItems: Array.isArray(data.galleryItems)
           ? data.galleryItems
           : DEFAULT_SITE_CONFIG.galleryItems,
+        galleryJumpCtaLabel:
+          typeof data.galleryJumpCtaLabel === 'string' &&
+          data.galleryJumpCtaLabel.trim()
+            ? data.galleryJumpCtaLabel
+            : DEFAULT_SITE_CONFIG.galleryJumpCtaLabel || '',
+        ctaLockDelaySeconds:
+          typeof data.ctaLockDelaySeconds === 'number' &&
+          Number.isFinite(data.ctaLockDelaySeconds) &&
+          data.ctaLockDelaySeconds >= 5
+            ? Math.round(data.ctaLockDelaySeconds)
+            : (DEFAULT_SITE_CONFIG.ctaLockDelaySeconds ?? 30),
+        ctaUnlockCooldownSeconds:
+          typeof data.ctaUnlockCooldownSeconds === 'number' &&
+          Number.isFinite(data.ctaUnlockCooldownSeconds) &&
+          data.ctaUnlockCooldownSeconds >= 10
+            ? Math.round(data.ctaUnlockCooldownSeconds)
+            : (DEFAULT_SITE_CONFIG.ctaUnlockCooldownSeconds ?? 60),
+        ctaAdminUnlockEpoch:
+          typeof data.ctaAdminUnlockEpoch === 'number' &&
+          Number.isFinite(data.ctaAdminUnlockEpoch) &&
+          data.ctaAdminUnlockEpoch >= 0
+            ? Math.round(data.ctaAdminUnlockEpoch)
+            : 0,
         approachItems: Array.isArray(data.approachItems)
           ? data.approachItems
           : DEFAULT_SITE_CONFIG.approachItems,

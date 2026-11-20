@@ -72,6 +72,10 @@ service cloud.firestore {
           'videoUrl',
           'videoTitle',
           'heroPillars',
+          'galleryJumpCtaLabel',
+          'ctaLockDelaySeconds',
+          'ctaUnlockCooldownSeconds',
+          'ctaAdminUnlockEpoch',
           'galleryKicker',
           'galleryTitle',
           'galleryDescription',
@@ -107,6 +111,10 @@ service cloud.firestore {
         && data.videoUrl is string && data.videoUrl.size() >= 8 && data.videoUrl.size() <= 1000 && data.videoUrl.matches('^https?://.+')
         && data.videoTitle is string && data.videoTitle.size() <= 200
         && data.heroPillars is list && data.heroPillars.size() <= 6 && (data.heroPillars.size() == 0 || data.heroPillars[0] is map)
+        && (!('galleryJumpCtaLabel' in data) || (data.galleryJumpCtaLabel is string && data.galleryJumpCtaLabel.size() <= 100))
+        && (!('ctaLockDelaySeconds' in data) || (data.ctaLockDelaySeconds is int && data.ctaLockDelaySeconds >= 5 && data.ctaLockDelaySeconds <= 3600))
+        && (!('ctaUnlockCooldownSeconds' in data) || (data.ctaUnlockCooldownSeconds is int && data.ctaUnlockCooldownSeconds >= 10 && data.ctaUnlockCooldownSeconds <= 3600))
+        && (!('ctaAdminUnlockEpoch' in data) || (data.ctaAdminUnlockEpoch is int && data.ctaAdminUnlockEpoch >= 0 && data.ctaAdminUnlockEpoch <= 9999999999999))
         && data.galleryKicker is string && data.galleryKicker.size() <= 120
         && data.galleryTitle is string && data.galleryTitle.size() >= 1 && data.galleryTitle.size() <= 200
         && data.galleryDescription is string && data.galleryDescription.size() <= 600
@@ -191,6 +199,36 @@ service cloud.firestore {
         && data.createdAt is timestamp && data.createdAt == request.time;
     }
 
+    function isValidCtaLock(data) {
+      return data.keys().hasAll([
+          'deviceKey',
+          'firstSeenAtMs',
+          'epoch',
+          'adminUnlocked',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'deviceKey',
+          'firstSeenAtMs',
+          'epoch',
+          'adminUnlocked',
+          'updatedAt'
+        ])
+        && data.deviceKey is string
+        && data.deviceKey.size() >= 4
+        && data.deviceKey.size() <= 128
+        && data.deviceKey.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.firstSeenAtMs is int
+        && data.firstSeenAtMs >= 1700000000000
+        && data.firstSeenAtMs <= 9999999999999
+        && data.epoch is int
+        && data.epoch >= 0
+        && data.epoch <= 9999999999999
+        && data.adminUnlocked is bool
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
     match /siteContent/{contentId} {
       allow get: if isValidId(contentId) && contentId == 'main';
       allow list: if false;
@@ -213,6 +251,10 @@ service cloud.firestore {
           'videoUrl',
           'videoTitle',
           'heroPillars',
+          'galleryJumpCtaLabel',
+          'ctaLockDelaySeconds',
+          'ctaUnlockCooldownSeconds',
+          'ctaAdminUnlockEpoch',
           'galleryKicker',
           'galleryTitle',
           'galleryDescription',
@@ -278,6 +320,34 @@ service cloud.firestore {
         && incoming().diff(existing()).affectedKeys().hasOnly(['dispatched'])
         && incoming().createdAt == existing().createdAt;
       allow delete: if isValidId(inquiryId) && isAdmin();
+    }
+
+    match /ctaLocks/{lockId} {
+      allow get: if isValidId(lockId);
+      allow list: if isAdmin();
+      allow create: if isValidId(lockId)
+        && isValidCtaLock(incoming())
+        && incoming().deviceKey == lockId
+        && incoming().adminUnlocked == false;
+      allow update: if isValidId(lockId)
+        && isValidCtaLock(incoming())
+        && incoming().deviceKey == existing().deviceKey
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'firstSeenAtMs',
+          'epoch',
+          'adminUnlocked',
+          'updatedAt'
+        ])
+        && (
+          isAdmin()
+          || (
+            incoming().adminUnlocked == false
+            && incoming().epoch > existing().epoch
+            && exists(/databases/$(database)/documents/siteContent/main)
+            && incoming().epoch == get(/databases/$(database)/documents/siteContent/main).data.ctaAdminUnlockEpoch
+          )
+        );
+      allow delete: if isValidId(lockId) && isAdmin();
     }
   }
 }

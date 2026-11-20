@@ -2,13 +2,16 @@ import {onAuthStateChanged, signInWithPopup, signOut, type User} from 'firebase/
 import {
   ArrowDown,
   CheckCircle2,
+  ChevronsDown,
   Lock,
   LogOut,
   Mail,
   MapPin,
   MessageCircle,
   Pencil,
+  RotateCcw,
   SlidersHorizontal,
+  Unlock,
 } from 'lucide-react';
 import {useEffect, useMemo, useState, type FormEvent} from 'react';
 import {AdminLoginModal} from './components/AdminLoginModal';
@@ -38,6 +41,15 @@ import {
   submitContactInquiry,
   type ContactDispatchResult,
 } from './services/contactRoutingService';
+import {
+  adminResetDeviceLock,
+  adminUnlockDeviceLock,
+  getLocalAdminUnlockEpoch,
+  resolveDeviceIpLockKey,
+  setLocalAdminUnlockEpoch,
+  syncDeviceCtaLock,
+  type DeviceCtaLockState,
+} from './services/ctaLockService';
 import {
   publishSiteContent,
   subscribeToSiteContent,
@@ -84,12 +96,60 @@ export default function App() {
   const [contactDispatch, setContactDispatch] =
     useState<ContactDispatchResult | null>(null);
 
+  // Per-IP device lock timer state for pre-gallery CTA button
+  const [deviceLockKey, setDeviceLockKey] = useState<string>('');
+  const [deviceLockState, setDeviceLockState] =
+    useState<DeviceCtaLockState | null>(null);
+  const [localAdminUnlockEpoch, setLocalAdminUnlockEpochState] = useState<number>(
+    () => getLocalAdminUnlockEpoch()
+  );
+  const [ctaNowMs, setCtaNowMs] = useState<number>(() => Date.now());
+
   // Real-time subscription to global published site content in Firestore
   useEffect(() => {
     const unsubscribe = subscribeToSiteContent((remoteConfig) => {
       setSiteConfig(remoteConfig);
     });
     return () => unsubscribe();
+  }, []);
+
+  // Resolve hashed device public IP key once per session
+  useEffect(() => {
+    let active = true;
+    void resolveDeviceIpLockKey().then((key) => {
+      if (active) {
+        setDeviceLockKey(key);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Sync device lock record whenever IP key or admin global unlock epoch updates
+  useEffect(() => {
+    if (!deviceLockKey) return;
+    let active = true;
+    void syncDeviceCtaLock(
+      deviceLockKey,
+      siteConfig.ctaAdminUnlockEpoch ?? 0
+    ).then((state) => {
+      if (active) {
+        setDeviceLockState(state);
+        setCtaNowMs(Date.now());
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [deviceLockKey, siteConfig.ctaAdminUnlockEpoch]);
+
+  // 1-second tick for lock delay & 1-minute auto-unlock countdown
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setCtaNowMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(id);
   }, []);
 
   // Track Firebase Auth user for cloud publishing
@@ -189,6 +249,70 @@ export default function App() {
     if (!isAdmin) return;
     await handlePublishConfig(DEFAULT_SITE_CONFIG);
     setActiveCategory('Todas');
+  };
+
+  const delayMs = Math.max(5, siteConfig.ctaLockDelaySeconds ?? 30) * 1000;
+  const cooldownMs =
+    Math.max(10, siteConfig.ctaUnlockCooldownSeconds ?? 60) * 1000;
+  const cycleMs = delayMs + cooldownMs;
+  const elapsedSinceFirstSeen = deviceLockState
+    ? Math.max(0, ctaNowMs - deviceLockState.firstSeenAtMs)
+    : 0;
+  const cyclePositionMs = elapsedSinceFirstSeen % cycleMs;
+  const isUnlockedByAdminOverride = Boolean(
+    deviceLockState &&
+      (deviceLockState.adminUnlocked ||
+        localAdminUnlockEpoch >= deviceLockState.firstSeenAtMs)
+  );
+  const isCtaLocked = Boolean(
+    deviceLockState && !isUnlockedByAdminOverride && cyclePositionMs >= delayMs
+  );
+  const secondsUntilLock =
+    deviceLockState && !isUnlockedByAdminOverride && cyclePositionMs < delayMs
+      ? Math.ceil((delayMs - cyclePositionMs) / 1000)
+      : 0;
+
+  const handleAdminUnlockCtaNow = async () => {
+    if (!isAdmin) return;
+    const unlockEpoch = Date.now();
+    setLocalAdminUnlockEpoch(unlockEpoch);
+    setLocalAdminUnlockEpochState(unlockEpoch);
+    if (deviceLockKey) {
+      setDeviceLockState((prev) =>
+        prev
+          ? {...prev, adminUnlocked: true, epoch: unlockEpoch}
+          : {
+              deviceKey: deviceLockKey,
+              firstSeenAtMs: unlockEpoch,
+              epoch: unlockEpoch,
+              adminUnlocked: true,
+            }
+      );
+      if (auth.currentUser) {
+        await adminUnlockDeviceLock(deviceLockKey, unlockEpoch);
+      }
+    }
+    if (auth.currentUser) {
+      await handlePublishConfig({
+        ...siteConfig,
+        ctaAdminUnlockEpoch: unlockEpoch,
+      });
+    }
+  };
+
+  const handleAdminResetCtaTest = async () => {
+    if (!isAdmin) return;
+    setLocalAdminUnlockEpoch(0);
+    setLocalAdminUnlockEpochState(0);
+    if (deviceLockKey) {
+      await adminResetDeviceLock(deviceLockKey);
+      const fresh = await syncDeviceCtaLock(
+        deviceLockKey,
+        siteConfig.ctaAdminUnlockEpoch ?? 0
+      );
+      setDeviceLockState(fresh);
+      setCtaNowMs(Date.now());
+    }
   };
 
   const handleLoginSuccess = (username: string) => {
@@ -539,6 +663,89 @@ export default function App() {
             </div>
           </div>
         </section>
+
+        {/* Centered High-Impact Red CTA Before Gallery -> Timed per-IP lock & Scrolls to Contacto */}
+        <div className="bg-white px-6 pt-12 pb-2 lg:px-10 lg:pt-14">
+          <div className="mx-auto flex max-w-7xl flex-col items-center justify-center gap-3">
+            {isCtaLocked ? (
+              <div
+                role="status"
+                aria-live="polite"
+                aria-disabled="true"
+                className="inline-flex w-full max-w-2xl cursor-not-allowed select-none flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-red-300 bg-slate-900 px-8 py-5 text-center text-white shadow-lg ring-4 ring-red-500/15 sm:w-auto sm:px-12 sm:py-6"
+              >
+                <div className="flex items-center justify-center gap-3 text-lg font-extrabold tracking-tight text-[#FF4D4D] sm:text-2xl">
+                  <Lock className="h-6 w-6 shrink-0" aria-hidden="true" />
+                  <span>Acceso bloqueado</span>
+                  <Lock className="h-6 w-6 shrink-0" aria-hidden="true" />
+                </div>
+              </div>
+            ) : (
+              <a
+                href="#contacto"
+                onClick={(e) => {
+                  e.preventDefault();
+                  document
+                    .getElementById('contacto')
+                    ?.scrollIntoView({behavior: 'smooth', block: 'start'});
+                }}
+                className="group inline-flex w-full max-w-2xl items-center justify-center gap-4 rounded-2xl border-2 border-[#FF5A5A] bg-gradient-to-r from-[#DC2626] via-[#FF2E2E] to-[#DC2626] px-8 py-5 text-center text-lg font-extrabold tracking-tight text-white shadow-[0_14px_40px_-6px_rgba(255,46,46,0.75)] ring-4 ring-red-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:from-[#EF4444] hover:via-[#FF4545] hover:to-[#EF4444] hover:shadow-[0_18px_48px_-4px_rgba(255,59,59,0.9)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#FF2E2E] sm:w-auto sm:px-12 sm:py-6 sm:text-2xl"
+              >
+                <ChevronsDown
+                  className="h-7 w-7 shrink-0 animate-bounce text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.3)] sm:h-8 sm:w-8"
+                  aria-hidden="true"
+                />
+                <span>
+                  {siteConfig.galleryJumpCtaLabel?.trim() ||
+                    DEFAULT_SITE_CONFIG.galleryJumpCtaLabel}
+                </span>
+                <ChevronsDown
+                  className="h-7 w-7 shrink-0 animate-bounce text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.3)] sm:h-8 sm:w-8"
+                  aria-hidden="true"
+                />
+              </a>
+            )}
+
+            {!isCtaLocked && secondsUntilLock > 0 && (
+              <p className="font-mono text-xs text-slate-500 tabular-nums">
+                {secondsUntilLock === 1
+                  ? 'Falta 1 segundo para que se bloquee'
+                  : `Faltan ${secondsUntilLock} segundos para que se bloquee`}
+              </p>
+            )}
+
+            {isAdmin && (
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+                {isCtaLocked && (
+                  <button
+                    type="button"
+                    onClick={() => void handleAdminUnlockCtaNow()}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#DC2626] px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#B91C1C]"
+                  >
+                    <Unlock className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>Desbloquear ahora (Admin)</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void handleAdminResetCtaTest()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-[#07090E] transition-colors hover:border-[#2563EB] hover:text-[#2563EB]"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Reiniciar temporizador</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openAdminEditor('gallery')}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#DC2626] transition-colors hover:text-[#991B1B] hover:underline"
+                >
+                  <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Editar texto y tiempos</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Gallery Section: Crisp White Canvas */}
         <GalleryGrid
@@ -909,6 +1116,8 @@ export default function App() {
           onPublishConfig={handlePublishConfig}
           onResetConfig={handleResetConfig}
           onLogout={handleLogout}
+          onUnlockAllCtaNow={handleAdminUnlockCtaNow}
+          onResetLocalCtaLock={handleAdminResetCtaTest}
         />
       )}
       </div>

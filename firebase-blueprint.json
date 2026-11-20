@@ -28,6 +28,10 @@
         },
         "videoTitle": { "type": "string", "maxLength": 200 },
         "heroPillars": { "type": "array" },
+        "galleryJumpCtaLabel": { "type": "string", "maxLength": 100 },
+        "ctaLockDelaySeconds": { "type": "integer" },
+        "ctaUnlockCooldownSeconds": { "type": "integer" },
+        "ctaAdminUnlockEpoch": { "type": "integer" },
         "galleryKicker": { "type": "string", "maxLength": 120 },
         "galleryTitle": { "type": "string", "minLength": 1, "maxLength": 200 },
         "galleryDescription": { "type": "string", "maxLength": 600 },
@@ -145,6 +149,30 @@
         "dispatched",
         "createdAt"
       ]
+    },
+    "CtaLock": {
+      "title": "CtaLock",
+      "description": "Hashed device/IP lock timer state for the pre-gallery contact CTA button.",
+      "type": "object",
+      "properties": {
+        "deviceKey": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "firstSeenAtMs": { "type": "integer" },
+        "epoch": { "type": "integer" },
+        "adminUnlocked": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "deviceKey",
+        "firstSeenAtMs",
+        "epoch",
+        "adminUnlocked",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -163,6 +191,10 @@
     "/contactInquiries/{inquiryId}": {
       "schema": { "$ref": "#/entities/ContactInquiry" },
       "description": "Private visitor inquiries readable, updatable (dispatched state), and deletable strictly by administrators."
+    },
+    "/ctaLocks/{lockId}": {
+      "schema": { "$ref": "#/entities/CtaLock" },
+      "description": "Hashed per-IP/device lock countdown state for the pre-gallery red CTA button."
     }
   }
 }

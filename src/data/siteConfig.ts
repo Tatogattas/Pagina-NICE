@@ -23,6 +23,10 @@ export interface SiteContentConfig {
   videoUrl: string;
   videoTitle: string;
   heroPillars: TextBlockItem[];
+  galleryJumpCtaLabel?: string;
+  ctaLockDelaySeconds?: number;
+  ctaUnlockCooldownSeconds?: number;
+  ctaAdminUnlockEpoch?: number;
   galleryKicker: string;
   galleryTitle: string;
   galleryDescription: string;
@@ -78,6 +82,10 @@ export const DEFAULT_SITE_CONFIG: SiteContentConfig = {
         'Evaluación biomecánica y progresiones seguras para prevenir lesiones y devolver movilidad a cada articulación.',
     },
   ],
+  galleryJumpCtaLabel: 'Agenda tu valoración · Ir a Contacto',
+  ctaLockDelaySeconds: 30,
+  ctaUnlockCooldownSeconds: 60,
+  ctaAdminUnlockEpoch: 0,
   galleryKicker: 'Archivo visual NICE',
   galleryTitle: 'Ejercicios paleo y readaptación clínica',
   galleryDescription:
