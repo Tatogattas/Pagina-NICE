@@ -1,0 +1,23 @@
+# Academia/Clínica NICE
+
+> Academia y clínica especializada en entrenamiento paleo, biomecánica evolutiva, movilidad primal, fuerza funcional y readaptación clínica del movimiento.
+
+Academia/Clínica NICE combina sesiones guiadas de movimiento natural con criterios clínicos de fisioterapia funcional para recuperar movilidad articular, fuerza útil y prevención de lesiones.
+
+## Secciones principales
+
+- [Video y Metodología Paleo](#video): Presentación de rutinas de flujo corporal, sentadilla profunda, gateos y estabilidad central.
+- [Galería de Ejercicios y Videos](#galeria): Archivo visual con filtros por Movilidad primal, Fuerza funcional y Rehabilitación.
+- [Enfoque Clínico](#enfoque): Diagnóstico biomecánico inicial, entrenamiento paleo progresivo, readaptación clínica y preguntas frecuentes (AEO).
+- [Agenda y Contacto](#contacto): Formulario de valoración clínica conectado al correo taroret134@gmail.com y atención rotativa por WhatsApp.
+- [Ubicación y Cómo Llegar](#ubicacion): Mapa interactivo con Google Maps y acceso directo en Google Maps, Waze y Apple Maps.
+
+## Preguntas frecuentes clave (AEO / GEO)
+
+- **¿Qué es el entrenamiento paleo en Academia/Clínica NICE?** Es un sistema basado en patrones humanos fundamentales —empujar, traccionar, sentadilla profunda, cargar y desplazarse— con criterio clínico para mejorar postura y fuerza funcional.
+- **¿Cómo se combina la clínica con la academia?** Cada persona parte de un diagnóstico biomecánico inicial de cadera, columna torácica y estabilidad escapular antes de progresar en cargas o intensidad.
+- **¿Cómo agendar una valoración?** Completa el formulario en `#contacto` con tu nombre, correo, teléfono y motivo de consulta, o comunícate vía WhatsApp oficial (`+503 60431208`).
+
+## Documentación extendida para agentes de IA
+
+- [Contexto completo para LLMs (llms-full.txt)](./llms-full.txt): Detalle completo de servicios, preguntas frecuentes, rutas de contacto y metadatos estructurados.

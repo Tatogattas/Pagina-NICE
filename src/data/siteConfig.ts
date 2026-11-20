@@ -36,6 +36,13 @@ export interface SiteContentConfig {
   contactDescription: string;
   contactEmail: string;
   contactLocation: string;
+  locationKicker?: string;
+  locationTitle?: string;
+  locationDescription?: string;
+  locationAddress?: string;
+  locationMapsUrl?: string;
+  locationLat?: number | null;
+  locationLng?: number | null;
   whatsappWebhookUrl?: string;
   footerTagline: string;
   footerCopyright: string;
@@ -106,6 +113,14 @@ export const DEFAULT_SITE_CONFIG: SiteContentConfig = {
     'Escríbenos para solicitar tu evaluación inicial de movimiento, horarios de sesiones paleo grupales o programas personalizados de rehabilitación.',
   contactEmail: 'clinica@academianice.example',
   contactLocation: 'Academia/Clínica NICE · Sede Central',
+  locationKicker: 'Ubicación · Cómo llegar',
+  locationTitle: 'Encuentra Academia/Clínica NICE',
+  locationDescription:
+    'Explora nuestra ubicación en Google Maps y toca el marcador o los botones de ruta para abrir indicaciones paso a paso en Google Maps, Waze o Apple Maps.',
+  locationAddress: 'Academia/Clínica NICE · Sede Central, El Salvador',
+  locationMapsUrl: '',
+  locationLat: null,
+  locationLng: null,
   whatsappWebhookUrl: '',
   footerTagline:
     'Academia/Clínica NICE — Ejercicios paleo, movilidad natural y clínica funcional.',

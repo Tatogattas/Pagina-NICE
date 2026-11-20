@@ -104,6 +104,41 @@ export function sanitizeSiteConfig(
     contactDescription: clampStr(raw.contactDescription, 600),
     contactEmail: clampStr(raw.contactEmail, 160),
     contactLocation: clampStr(raw.contactLocation, 160),
+    locationKicker: clampStr(
+      raw.locationKicker ?? DEFAULT_SITE_CONFIG.locationKicker ?? '',
+      120
+    ),
+    locationTitle: clampStr(
+      raw.locationTitle ?? DEFAULT_SITE_CONFIG.locationTitle ?? '',
+      200
+    ),
+    locationDescription: clampStr(
+      raw.locationDescription ?? DEFAULT_SITE_CONFIG.locationDescription ?? '',
+      600
+    ),
+    locationAddress: clampStr(
+      raw.locationAddress ?? DEFAULT_SITE_CONFIG.locationAddress ?? '',
+      240
+    ),
+    locationMapsUrl: (() => {
+      const candidate = clampStr(raw.locationMapsUrl ?? '', 1000);
+      if (!candidate) return '';
+      return /^https:\/\/.+/.test(candidate) ? candidate : '';
+    })(),
+    locationLat:
+      typeof raw.locationLat === 'number' &&
+      Number.isFinite(raw.locationLat) &&
+      raw.locationLat >= -90 &&
+      raw.locationLat <= 90
+        ? Number(raw.locationLat.toFixed(6))
+        : null,
+    locationLng:
+      typeof raw.locationLng === 'number' &&
+      Number.isFinite(raw.locationLng) &&
+      raw.locationLng >= -180 &&
+      raw.locationLng <= 180
+        ? Number(raw.locationLng.toFixed(6))
+        : null,
     whatsappWebhookUrl: (() => {
       const candidate = clampStr(raw.whatsappWebhookUrl ?? '', 1000);
       if (!candidate) return '';
@@ -137,6 +172,18 @@ export function subscribeToSiteContent(
           typeof data.whatsappWebhookUrl === 'string'
             ? data.whatsappWebhookUrl
             : '',
+        locationMapsUrl:
+          typeof data.locationMapsUrl === 'string' ? data.locationMapsUrl : '',
+        locationLat:
+          typeof data.locationLat === 'number' &&
+          Number.isFinite(data.locationLat)
+            ? data.locationLat
+            : null,
+        locationLng:
+          typeof data.locationLng === 'number' &&
+          Number.isFinite(data.locationLng)
+            ? data.locationLng
+            : null,
         heroPillars: Array.isArray(data.heroPillars)
           ? data.heroPillars
           : DEFAULT_SITE_CONFIG.heroPillars,

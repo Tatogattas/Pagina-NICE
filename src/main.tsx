@@ -3,6 +3,24 @@ import App from './App.tsx';
 import {ErrorBoundary} from './components/ErrorBoundary.tsx';
 import './index.css';
 
+// Two-tier Google Maps quota/auth handling before React mount
+const win = window as Window & {gm_authFailure?: () => void};
+win.gm_authFailure = () => {
+  window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
+};
+
+const origConsoleError = console.error;
+console.error = (...args: unknown[]) => {
+  origConsoleError.apply(console, args);
+  const msg = args.map((a) => String(a)).join(' ');
+  if (
+    msg.includes('OverQuotaMapError') ||
+    msg.includes('QuotaExceededError')
+  ) {
+    window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
+  }
+};
+
 createRoot(document.getElementById('root')!).render(
   <ErrorBoundary>
     <App />

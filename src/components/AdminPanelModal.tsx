@@ -9,7 +9,9 @@ import {
   Film,
   Image as ImageIcon,
   LogOut,
+  MapPin,
   MessageCircle,
+  Navigation,
   Pencil,
   Play,
   Plus,
@@ -43,9 +45,13 @@ import {
   WHATSAPP_ADVISORS,
   type StoredContactInquiry,
 } from '../services/contactRoutingService';
+import {
+  buildNavigationLinks,
+  parseGoogleMapsCoordinates,
+} from '../utils/mapsLinks';
 import {BrandLogo} from './BrandLogo';
 
-type EditorTab = 'hero' | 'gallery' | 'sections' | 'inquiries';
+type EditorTab = 'hero' | 'gallery' | 'sections' | 'location' | 'inquiries';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -273,6 +279,73 @@ export function AdminPanelModal({
       trimmed
         ? 'Webhook de WhatsApp conectado y publicado.'
         : 'Webhook de WhatsApp desactivado.'
+    );
+  };
+
+  const handleDetectGps = () => {
+    setErrorMsg(null);
+    if (!navigator.geolocation) {
+      setErrorMsg('Tu navegador no admite geolocalización.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setDraft((prev) => ({
+          ...prev,
+          locationLat: Number(pos.coords.latitude.toFixed(6)),
+          locationLng: Number(pos.coords.longitude.toFixed(6)),
+        }));
+        flashSaved('Coordenadas GPS detectadas. Guarda para publicarlas.');
+      },
+      () => {
+        setErrorMsg(
+          'No se pudo obtener la ubicación GPS. Permite el acceso o pega tu enlace de Google Maps.'
+        );
+      },
+      {enableHighAccuracy: true, timeout: 8000}
+    );
+  };
+
+  const handleSaveLocation = async (e: FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    const trimmedUrl = (draft.locationMapsUrl ?? '').trim();
+    if (trimmedUrl && !/^https:\/\/.+/.test(trimmedUrl)) {
+      setErrorMsg(
+        'El enlace de Google Maps debe comenzar con https:// (o déjalo vacío).'
+      );
+      return;
+    }
+    const lat =
+      typeof draft.locationLat === 'number' && Number.isFinite(draft.locationLat)
+        ? draft.locationLat
+        : null;
+    const lng =
+      typeof draft.locationLng === 'number' && Number.isFinite(draft.locationLng)
+        ? draft.locationLng
+        : null;
+    if ((lat === null) !== (lng === null)) {
+      setErrorMsg(
+        'Ingresa tanto latitud como longitud válidas, o deja ambas vacías.'
+      );
+      return;
+    }
+    if (lat !== null && (lat < -90 || lat > 90)) {
+      setErrorMsg('La latitud debe estar entre -90 y 90.');
+      return;
+    }
+    if (lng !== null && (lng < -180 || lng > 180)) {
+      setErrorMsg('La longitud debe estar entre -180 y 180.');
+      return;
+    }
+    await persistChanges(
+      {
+        ...draft,
+        locationMapsUrl: trimmedUrl,
+        locationLat: lat,
+        locationLng: lng,
+      },
+      'Ubicación y mapa actualizados en la nube.'
     );
   };
 
@@ -556,6 +629,7 @@ export function AdminPanelModal({
                 {id: 'hero', label: 'Portada y Video'},
                 {id: 'gallery', label: 'Galería (Fotos y Videos)'},
                 {id: 'sections', label: 'Enfoque, Contacto y Pie'},
+                {id: 'location', label: 'Ubicación (Maps)'},
                 {
                   id: 'inquiries',
                   label: `Consultas (${inquiries.length})`,
@@ -1529,6 +1603,189 @@ export function AdminPanelModal({
                 </div>
               )}
             </div>
+          )}
+
+          {activeTab === 'location' && (
+            <form
+              onSubmit={(e) => void handleSaveLocation(e)}
+              className="space-y-6"
+            >
+              <div className="rounded-xl border border-slate-200 bg-[#F4F7FC] p-4 text-xs text-slate-700">
+                <p className="font-semibold text-[#07090E]">
+                  Pestaña Ubicación con Google Maps (después de Contacto)
+                </p>
+                <p className="mt-1 leading-relaxed">
+                  Configura la dirección exacta, el enlace directo de Google Maps o
+                  las coordenadas GPS de tu clínica para que al tocar cualquier
+                  botón se abra <strong>Cómo llegar</strong> en Google Maps,
+                  Waze o Apple Maps.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-semibold text-[#07090E]">
+                    Antetítulo de ubicación
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={120}
+                    value={draft.locationKicker ?? ''}
+                    onChange={(e) =>
+                      setDraft({...draft, locationKicker: e.target.value})
+                    }
+                    placeholder="Ubicación · Cómo llegar"
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#07090E]">
+                    Título de la sección Ubicación
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={200}
+                    value={draft.locationTitle ?? ''}
+                    onChange={(e) =>
+                      setDraft({...draft, locationTitle: e.target.value})
+                    }
+                    placeholder="Encuentra Academia/Clínica NICE"
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#07090E]">
+                  Descripción de llegada / referencias
+                </label>
+                <textarea
+                  rows={2}
+                  maxLength={600}
+                  value={draft.locationDescription ?? ''}
+                  onChange={(e) =>
+                    setDraft({...draft, locationDescription: e.target.value})
+                  }
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#07090E]">
+                  Dirección visible de la clínica
+                </label>
+                <input
+                  type="text"
+                  maxLength={240}
+                  value={draft.locationAddress ?? ''}
+                  onChange={(e) =>
+                    setDraft({...draft, locationAddress: e.target.value})
+                  }
+                  placeholder="Colonia Escalón, Calle..., San Salvador"
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div>
+                  <label className="block text-xs font-semibold text-[#07090E]">
+                    Enlace directo de Google Maps (opcional; extrae coordenadas
+                    automáticamente si las incluye)
+                  </label>
+                  <input
+                    type="url"
+                    maxLength={1000}
+                    value={draft.locationMapsUrl ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const parsed = parseGoogleMapsCoordinates(val);
+                      setDraft((prev) => ({
+                        ...prev,
+                        locationMapsUrl: val,
+                        ...(parsed
+                          ? {locationLat: parsed.lat, locationLng: parsed.lng}
+                          : {}),
+                      }));
+                    }}
+                    placeholder="https://www.google.com/maps/place/... o https://maps.app.goo.gl/..."
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:items-end">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#07090E]">
+                      Latitud GPS
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min={-90}
+                      max={90}
+                      value={draft.locationLat ?? ''}
+                      onChange={(e) => {
+                        const raw = e.target.value.trim();
+                        setDraft({
+                          ...draft,
+                          locationLat: raw === '' ? null : Number(raw),
+                        });
+                      }}
+                      placeholder="13.6929"
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#07090E]">
+                      Longitud GPS
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min={-180}
+                      max={180}
+                      value={draft.locationLng ?? ''}
+                      onChange={(e) => {
+                        const raw = e.target.value.trim();
+                        setDraft({
+                          ...draft,
+                          locationLng: raw === '' ? null : Number(raw),
+                        });
+                      }}
+                      placeholder="-89.2182"
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDetectGps}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-[#07090E] transition-colors hover:border-[#2563EB] hover:text-[#2563EB]"
+                  >
+                    <MapPin className="h-3.5 w-3.5 text-[#2563EB]" aria-hidden="true" />
+                    <span>Usar GPS actual</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <a
+                  href={buildNavigationLinks(draft).googleMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#2563EB] hover:underline"
+                >
+                  <Navigation className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Probar Cómo llegar en Google Maps</span>
+                </a>
+
+                <button
+                  type="submit"
+                  disabled={saving || connectingGoogle}
+                  className="rounded-lg bg-[#2563EB] px-5 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8] disabled:opacity-60"
+                >
+                  {saving ? 'Publicando...' : 'Guardar y publicar ubicación'}
+                </button>
+              </div>
+            </form>
           )}
         </div>
       </div>

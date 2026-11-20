@@ -87,11 +87,24 @@ export default defineConfig(({command, isPreview}) => {
                   force: true,
                 });
               }
+
+              for (const discoveryFile of [
+                'robots.txt',
+                'sitemap.xml',
+                'llms.txt',
+                'llms-full.txt',
+              ]) {
+                const srcFile = path.resolve(distDir, discoveryFile);
+                if (fs.existsSync(srcFile)) {
+                  fs.copyFileSync(srcFile, path.resolve(rootDir, discoveryFile));
+                }
+              }
             }
           }
         },
       },
     ],
+    envPrefix: ['VITE_', 'GOOGLE_MAPS_'],
     base:
       command === 'serve' && !isPreview
         ? '/'

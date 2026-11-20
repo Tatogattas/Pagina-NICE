@@ -5,6 +5,7 @@ import {
   Lock,
   LogOut,
   Mail,
+  MapPin,
   MessageCircle,
   Pencil,
   SlidersHorizontal,
@@ -16,6 +17,11 @@ import {BrandLogo} from './components/BrandLogo';
 import {ExternalVideoPlayer} from './components/ExternalVideoPlayer';
 import {GalleryGrid} from './components/GalleryGrid';
 import {LightboxModal} from './components/LightboxModal';
+import {LocationSection} from './components/LocationSection';
+import {
+  AEO_FAQ_ITEMS,
+  SeoStructuredData,
+} from './components/SeoStructuredData';
 import {
   type GalleryCategory,
   type GalleryItem,
@@ -62,9 +68,10 @@ export default function App() {
   // Admin panel modal state
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [adminPanelTab, setAdminPanelTab] = useState<
-    'hero' | 'gallery' | 'sections' | 'inquiries'
+    'hero' | 'gallery' | 'sections' | 'location' | 'inquiries'
   >('hero');
   const [editingGalleryId, setEditingGalleryId] = useState<string | null>(null);
+  const [gmpQuotaExceeded, setGmpQuotaExceeded] = useState(false);
 
   // Contact form state
   const [contactName, setContactName] = useState('');
@@ -113,6 +120,13 @@ export default function App() {
     }
   }, [siteConfig.logoUrl]);
 
+  useEffect(() => {
+    const onQuotaExceeded = () => setGmpQuotaExceeded(true);
+    window.addEventListener('gmp-quota-exceeded', onQuotaExceeded);
+    return () =>
+      window.removeEventListener('gmp-quota-exceeded', onQuotaExceeded);
+  }, []);
+
   const visibleGalleryItems = useMemo(
     () =>
       activeCategory === 'Todas'
@@ -124,7 +138,7 @@ export default function App() {
   );
 
   const openAdminEditor = (
-    tab: 'hero' | 'gallery' | 'sections' | 'inquiries',
+    tab: 'hero' | 'gallery' | 'sections' | 'location' | 'inquiries',
     itemId: string | null = null
   ) => {
     if (!isAdmin) {
@@ -245,6 +259,25 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-white text-[#07090E]">
+      <SeoStructuredData config={siteConfig} />
+
+      {gmpQuotaExceeded && (
+        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2.5 text-xs md:text-sm text-center sticky top-0 z-50 shadow-sm">
+          <span>
+            Google Maps Platform quota reached. If you are the app owner, visit{' '}
+            <a
+              href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-semibold text-amber-950 hover:text-amber-800"
+            >
+              maps developer site
+            </a>{' '}
+            for instructions to update your account.
+          </span>
+        </div>
+      )}
+
       {/* Strict 3-Zone Top Bar */}
       <header className="border-b border-white/10 bg-[#07090E] text-white">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-8 px-6 lg:px-10">
@@ -261,10 +294,10 @@ export default function App() {
             <span>{siteConfig.brandName}</span>
           </a>
 
-          {/* Zone 2: 4 Concise Single-Line Links */}
+          {/* Zone 2: Concise Single-Line Links including Ubicación after Contacto */}
           <nav
             aria-label="Navegación principal"
-            className="hidden items-center gap-7 text-sm font-medium text-slate-300 md:flex"
+            className="hidden items-center gap-6 text-sm font-medium text-slate-300 md:flex lg:gap-7"
           >
             <a
               href="#video"
@@ -289,6 +322,13 @@ export default function App() {
               className="whitespace-nowrap shrink-0 underline-offset-8 transition-colors hover:text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B82F6]"
             >
               Contacto
+            </a>
+            <a
+              href="#ubicacion"
+              className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 rounded-md bg-white/8 px-2.5 py-1 text-white underline-offset-8 transition-colors hover:bg-[#2563EB] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B82F6]"
+            >
+              <MapPin className="h-3.5 w-3.5 text-[#60A5FA]" aria-hidden="true" />
+              <span>Ubicación</span>
             </a>
           </nav>
 
@@ -315,6 +355,32 @@ export default function App() {
             )}
           </div>
         </div>
+
+        {/* Mobile quick navigation strip with Ubicación tab after Contacto */}
+        <nav
+          aria-label="Navegación móvil"
+          className="flex items-center gap-5 overflow-x-auto border-t border-white/10 px-6 py-2.5 text-xs font-medium text-slate-300 md:hidden"
+        >
+          <a href="#video" className="whitespace-nowrap shrink-0 hover:text-white">
+            Video
+          </a>
+          <a href="#galeria" className="whitespace-nowrap shrink-0 hover:text-white">
+            Galería
+          </a>
+          <a href="#enfoque" className="whitespace-nowrap shrink-0 hover:text-white">
+            Enfoque
+          </a>
+          <a href="#contacto" className="whitespace-nowrap shrink-0 hover:text-white">
+            Contacto
+          </a>
+          <a
+            href="#ubicacion"
+            className="inline-flex items-center gap-1 whitespace-nowrap shrink-0 font-semibold text-[#60A5FA]"
+          >
+            <MapPin className="h-3 w-3" aria-hidden="true" />
+            <span>Ubicación</span>
+          </a>
+        </nav>
       </header>
 
       {/* Admin Active Toolbar (visible strictly when logged in as tatogattas) */}
@@ -360,6 +426,14 @@ export default function App() {
               >
                 <Pencil className="h-3 w-3" aria-hidden="true" />
                 <span>Textos y contacto</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openAdminEditor('location')}
+                className="inline-flex items-center gap-1 font-medium text-white transition-colors hover:text-[#60A5FA]"
+              >
+                <MapPin className="h-3 w-3" aria-hidden="true" />
+                <span>Ubicación</span>
               </button>
               <button
                 type="button"
@@ -521,6 +595,28 @@ export default function App() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* AEO / GEO / LLMO Answer Block */}
+            <div className="mt-14 border-t border-slate-200 pt-10">
+              <p className="text-xs font-medium text-[#2563EB]">
+                Preguntas frecuentes · AEO
+              </p>
+              <dl className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-3">
+                {AEO_FAQ_ITEMS.map((faq) => (
+                  <div
+                    key={faq.question}
+                    className="rounded-xl border border-slate-200 bg-white p-5"
+                  >
+                    <dt className="text-sm font-semibold text-[#07090E]">
+                      {faq.question}
+                    </dt>
+                    <dd className="aeo-answer mt-2 text-xs leading-relaxed text-slate-600">
+                      {faq.answer}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
             </div>
           </div>
         </section>
@@ -723,6 +819,13 @@ export default function App() {
             </div>
           </div>
         </section>
+
+        {/* Dedicated Location Tab Section After Contacto */}
+        <LocationSection
+          config={siteConfig}
+          isAdmin={isAdmin}
+          onEditLocation={() => openAdminEditor('location')}
+        />
       </main>
 
       {/* Quiet Obsidian Footer */}
@@ -757,6 +860,9 @@ export default function App() {
             </a>
             <a href="#contacto" className="transition-colors hover:text-white">
               Contacto
+            </a>
+            <a href="#ubicacion" className="transition-colors hover:text-white">
+              Ubicación
             </a>
             <span className="text-slate-500">
               {siteConfig.footerCopyright}

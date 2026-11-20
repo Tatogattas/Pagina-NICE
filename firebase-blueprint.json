@@ -41,6 +41,17 @@
         "contactDescription": { "type": "string", "maxLength": 600 },
         "contactEmail": { "type": "string", "maxLength": 160 },
         "contactLocation": { "type": "string", "maxLength": 160 },
+        "locationKicker": { "type": "string", "maxLength": 120 },
+        "locationTitle": { "type": "string", "maxLength": 200 },
+        "locationDescription": { "type": "string", "maxLength": 600 },
+        "locationAddress": { "type": "string", "maxLength": 240 },
+        "locationMapsUrl": {
+          "type": "string",
+          "maxLength": 1000,
+          "pattern": "^$|^https://.+"
+        },
+        "locationLat": { "type": "number" },
+        "locationLng": { "type": "number" },
         "footerTagline": { "type": "string", "maxLength": 300 },
         "footerCopyright": { "type": "string", "maxLength": 120 },
         "updatedByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
