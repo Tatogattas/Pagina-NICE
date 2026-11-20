@@ -522,13 +522,16 @@ export default function App() {
               </div>
             </div>
 
-            <div className="mt-14 grid grid-cols-1 gap-8 border-t border-white/10 pt-8 md:grid-cols-3">
+            <div className="mt-14 grid grid-cols-1 gap-6 border-t border-red-500/35 pt-8 md:grid-cols-3">
               {siteConfig.heroPillars.map((pillar) => (
-                <div key={pillar.id}>
-                  <h2 className="text-sm font-semibold text-white">
+                <div
+                  key={pillar.id}
+                  className="rounded-xl border border-red-500/45 border-t-2 border-t-[#FF2E2E] bg-gradient-to-b from-red-600/20 via-red-950/35 to-[#0B0F17] p-5 shadow-[0_10px_32px_-8px_rgba(239,68,68,0.45)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#FF4545] hover:shadow-[0_14px_38px_-6px_rgba(239,68,68,0.65)]"
+                >
+                  <h2 className="text-base font-bold tracking-tight text-[#FF3B3B] drop-shadow-[0_2px_14px_rgba(255,59,59,0.65)]">
                     {pillar.title}
                   </h2>
-                  <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
+                  <p className="mt-2 text-sm font-medium leading-relaxed text-[#FF7A7A] drop-shadow-[0_1px_6px_rgba(220,38,38,0.35)]">
                     {pillar.description}
                   </p>
                 </div>
