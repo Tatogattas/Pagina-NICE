@@ -79,6 +79,7 @@ service cloud.firestore {
           'galleryKicker',
           'galleryTitle',
           'galleryDescription',
+          'galleryCategories',
           'galleryItems',
           'approachKicker',
           'approachTitle',
@@ -118,6 +119,7 @@ service cloud.firestore {
         && data.galleryKicker is string && data.galleryKicker.size() <= 120
         && data.galleryTitle is string && data.galleryTitle.size() >= 1 && data.galleryTitle.size() <= 200
         && data.galleryDescription is string && data.galleryDescription.size() <= 600
+        && (!('galleryCategories' in data) || (data.galleryCategories is list && data.galleryCategories.size() >= 1 && data.galleryCategories.size() <= 20 && data.galleryCategories[0] is string && data.galleryCategories[0].size() >= 1 && data.galleryCategories[0].size() <= 60))
         && data.galleryItems is list && data.galleryItems.size() <= 50 && (data.galleryItems.size() == 0 || data.galleryItems[0] is map)
         && data.approachKicker is string && data.approachKicker.size() <= 120
         && data.approachTitle is string && data.approachTitle.size() >= 1 && data.approachTitle.size() <= 200
@@ -258,6 +260,7 @@ service cloud.firestore {
           'galleryKicker',
           'galleryTitle',
           'galleryDescription',
+          'galleryCategories',
           'galleryItems',
           'approachKicker',
           'approachTitle',

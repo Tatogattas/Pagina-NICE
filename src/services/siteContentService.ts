@@ -6,6 +6,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import {
+  DEFAULT_GALLERY_CATEGORIES,
   isKnownVideoUrl,
   normalizeExternalMediaInput,
   normalizeImageUrl,
@@ -23,6 +24,25 @@ const SITE_DOC_PATH = `${SITE_DOC_COLLECTION}/${SITE_DOC_ID}`;
 function clampStr(value: string, max: number, fallback = ''): string {
   const clean = typeof value === 'string' ? value.trim() : fallback;
   return clean.slice(0, max);
+}
+
+function sanitizeGalleryCategories(rawCategories: unknown): string[] {
+  if (!Array.isArray(rawCategories)) {
+    return [...DEFAULT_GALLERY_CATEGORIES];
+  }
+  const seen = new Set<string>();
+  const clean: string[] = [];
+  for (const entry of rawCategories) {
+    if (typeof entry !== 'string') continue;
+    const trimmed = clampStr(entry, 60);
+    if (!trimmed) continue;
+    const lower = trimmed.toLowerCase();
+    if (lower === 'todas' || seen.has(lower)) continue;
+    seen.add(lower);
+    clean.push(trimmed);
+    if (clean.length >= 20) break;
+  }
+  return clean.length > 0 ? clean : [...DEFAULT_GALLERY_CATEGORIES];
 }
 
 /**
@@ -79,38 +99,43 @@ export function sanitizeSiteConfig(
     galleryKicker: clampStr(raw.galleryKicker, 120),
     galleryTitle: clampStr(raw.galleryTitle, 200, DEFAULT_SITE_CONFIG.galleryTitle) || DEFAULT_SITE_CONFIG.galleryTitle,
     galleryDescription: clampStr(raw.galleryDescription, 600),
-    galleryItems: (Array.isArray(raw.galleryItems) ? raw.galleryItems : [])
-      .slice(0, 50)
-      .map((item, idx) => {
-        const normalizedImage = normalizeImageUrl(item.imageUrl || '');
-        const normalizedVideo = normalizeExternalMediaInput(item.videoUrl || '');
-        const inferredVideo =
-          !normalizedVideo && normalizedImage && isKnownVideoUrl(normalizedImage)
-            ? normalizedImage
-            : normalizedVideo;
-        const cleanVideoUrl = clampStr(inferredVideo, 1000);
-        const cleanImageUrl = clampStr(
-          normalizedImage === cleanVideoUrl ? '' : normalizedImage,
-          1000
-        );
-        const mediaType =
-          item.mediaType === 'video' || Boolean(cleanVideoUrl)
-            ? 'video'
-            : 'image';
-        return {
-          id: clampStr(item.id || `media-${idx + 1}`, 100),
-          mediaType,
-          title: clampStr(item.title, 160),
-          category: item.category,
-          location: clampStr(item.location, 120),
-          year: clampStr(item.year, 16),
-          imageUrl: cleanImageUrl,
-          ...(cleanVideoUrl ? {videoUrl: cleanVideoUrl} : {}),
-          alt: clampStr(item.alt, 300),
-          aspectHint: clampStr(item.aspectHint || '4:3', 20),
-          ...(item.isCustom ? {isCustom: true} : {}),
-        };
-      }),
+    galleryCategories: sanitizeGalleryCategories(raw.galleryCategories),
+    galleryItems: (() => {
+      const cleanCategories = sanitizeGalleryCategories(raw.galleryCategories);
+      const fallbackCategory = cleanCategories[0] || DEFAULT_GALLERY_CATEGORIES[0];
+      return (Array.isArray(raw.galleryItems) ? raw.galleryItems : [])
+        .slice(0, 50)
+        .map((item, idx) => {
+          const normalizedImage = normalizeImageUrl(item.imageUrl || '');
+          const normalizedVideo = normalizeExternalMediaInput(item.videoUrl || '');
+          const inferredVideo =
+            !normalizedVideo && normalizedImage && isKnownVideoUrl(normalizedImage)
+              ? normalizedImage
+              : normalizedVideo;
+          const cleanVideoUrl = clampStr(inferredVideo, 1000);
+          const cleanImageUrl = clampStr(
+            normalizedImage === cleanVideoUrl ? '' : normalizedImage,
+            1000
+          );
+          const mediaType =
+            item.mediaType === 'video' || Boolean(cleanVideoUrl)
+              ? 'video'
+              : 'image';
+          return {
+            id: clampStr(item.id || `media-${idx + 1}`, 100),
+            mediaType,
+            title: clampStr(item.title, 160),
+            category: clampStr(item.category, 60, fallbackCategory) || fallbackCategory,
+            location: clampStr(item.location, 120),
+            year: clampStr(item.year, 16),
+            imageUrl: cleanImageUrl,
+            ...(cleanVideoUrl ? {videoUrl: cleanVideoUrl} : {}),
+            alt: clampStr(item.alt, 300),
+            aspectHint: clampStr(item.aspectHint || '4:3', 20),
+            ...(item.isCustom ? {isCustom: true} : {}),
+          };
+        });
+    })(),
     approachKicker: clampStr(raw.approachKicker, 120),
     approachTitle: clampStr(raw.approachTitle, 200, DEFAULT_SITE_CONFIG.approachTitle) || DEFAULT_SITE_CONFIG.approachTitle,
     approachDescription: clampStr(raw.approachDescription, 600),
@@ -212,6 +237,7 @@ export function subscribeToSiteContent(
         heroPillars: Array.isArray(data.heroPillars)
           ? data.heroPillars
           : DEFAULT_SITE_CONFIG.heroPillars,
+        galleryCategories: sanitizeGalleryCategories(data.galleryCategories),
         galleryItems: Array.isArray(data.galleryItems)
           ? data.galleryItems
           : DEFAULT_SITE_CONFIG.galleryItems,

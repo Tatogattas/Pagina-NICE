@@ -1,8 +1,10 @@
-export type GalleryCategory =
-  | 'Todas'
-  | 'Movilidad primal'
-  | 'Fuerza funcional'
-  | 'Rehabilitación';
+export const DEFAULT_GALLERY_CATEGORIES: string[] = [
+  'Movilidad primal',
+  'Fuerza funcional',
+  'Rehabilitación',
+];
+
+export type GalleryCategory = string;
 
 export type GalleryMediaType = 'image' | 'video';
 
@@ -17,7 +19,7 @@ export interface GalleryItem {
   id: string;
   mediaType?: GalleryMediaType;
   title: string;
-  category: Exclude<GalleryCategory, 'Todas'>;
+  category: string;
   location: string;
   year: string;
   imageUrl: string;

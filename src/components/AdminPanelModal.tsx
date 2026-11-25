@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import {useEffect, useMemo, useRef, useState, type FormEvent} from 'react';
 import {
+  DEFAULT_GALLERY_CATEGORIES,
   getGalleryItemThumbnail,
   isKnownVideoUrl,
   isValidHttpsUrl,
@@ -32,7 +33,6 @@ import {
   normalizeExternalMediaInput,
   normalizeImageUrl,
   parseExternalVideoUrl,
-  type GalleryCategory,
   type GalleryItem,
   type GalleryMediaType,
 } from '../data/externalMedia';
@@ -118,11 +118,27 @@ export function AdminPanelModal({
   const [imgUrl, setImgUrl] = useState('');
   const [itemVideoUrl, setItemVideoUrl] = useState('');
   const [imgTitle, setImgTitle] = useState('');
-  const [imgCategory, setImgCategory] =
-    useState<Exclude<GalleryCategory, 'Todas'>>('Movilidad primal');
+  const [imgCategory, setImgCategory] = useState<string>(
+    DEFAULT_GALLERY_CATEGORIES[0]
+  );
   const [imgLocation, setImgLocation] = useState('');
   const [imgYear, setImgYear] = useState('2026');
   const [imgAlt, setImgAlt] = useState('');
+
+  // Editable gallery categories state
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingCategoryIndex, setEditingCategoryIndex] = useState<
+    number | null
+  >(null);
+  const [editingCategoryValue, setEditingCategoryValue] = useState('');
+
+  const availableCategories = useMemo(() => {
+    const raw =
+      draft.galleryCategories && draft.galleryCategories.length > 0
+        ? draft.galleryCategories
+        : DEFAULT_GALLERY_CATEGORIES;
+    return raw.filter((c) => c.trim().length > 0);
+  }, [draft.galleryCategories]);
 
   const parsedGalleryVideo = useMemo(() => {
     if (itemMediaType !== 'video' || !itemVideoUrl.trim()) return null;
@@ -199,15 +215,21 @@ export function AdminPanelModal({
   if (!isOpen) return null;
 
   function resetItemForm() {
+    const fallbackCategory =
+      (draft.galleryCategories && draft.galleryCategories[0]) ||
+      DEFAULT_GALLERY_CATEGORIES[0];
     setSelectedItemId(null);
     setItemMediaType('image');
     setImgUrl('');
     setItemVideoUrl('');
     setImgTitle('');
-    setImgCategory('Movilidad primal');
+    setImgCategory(fallbackCategory);
     setImgLocation('');
     setImgYear(String(new Date().getFullYear()));
     setImgAlt('');
+    setNewCategoryName('');
+    setEditingCategoryIndex(null);
+    setEditingCategoryValue('');
   }
 
   function flashSaved(msg: string) {
@@ -588,6 +610,132 @@ export function AdminPanelModal({
     const ok = await persistChanges(updated, 'Orden actualizado en la nube.');
     if (ok) {
       setDraft(updated);
+    }
+  };
+
+  const handleAddCategory = async () => {
+    setErrorMsg(null);
+    const trimmed = newCategoryName.trim().slice(0, 60);
+    if (!trimmed) {
+      setErrorMsg('Escribe un nombre para la nueva categoría.');
+      return;
+    }
+    if (trimmed.toLowerCase() === 'todas') {
+      setErrorMsg('«Todas» está reservado para el filtro general.');
+      return;
+    }
+    if (
+      availableCategories.some(
+        (cat) => cat.toLowerCase() === trimmed.toLowerCase()
+      )
+    ) {
+      setErrorMsg(`La categoría «${trimmed}» ya existe.`);
+      return;
+    }
+    if (availableCategories.length >= 20) {
+      setErrorMsg('Se permite un máximo de 20 categorías.');
+      return;
+    }
+    const nextCategories = [...availableCategories, trimmed];
+    const updated: SiteContentConfig = {
+      ...draft,
+      galleryCategories: nextCategories,
+    };
+    const ok = await persistChanges(
+      updated,
+      `Categoría «${trimmed}» añadida y publicada.`
+    );
+    if (ok) {
+      setDraft(updated);
+      setImgCategory(trimmed);
+      setNewCategoryName('');
+    }
+  };
+
+  const handleSaveRenamedCategory = async (index: number) => {
+    setErrorMsg(null);
+    const oldName = availableCategories[index];
+    if (!oldName) return;
+    const trimmed = editingCategoryValue.trim().slice(0, 60);
+    if (!trimmed) {
+      setErrorMsg('El nombre de la categoría no puede quedar vacío.');
+      return;
+    }
+    if (trimmed.toLowerCase() === 'todas') {
+      setErrorMsg('«Todas» está reservado para el filtro general.');
+      return;
+    }
+    if (
+      availableCategories.some(
+        (cat, idx) => idx !== index && cat.toLowerCase() === trimmed.toLowerCase()
+      )
+    ) {
+      setErrorMsg(`Ya existe otra categoría llamada «${trimmed}».`);
+      return;
+    }
+    if (oldName === trimmed) {
+      setEditingCategoryIndex(null);
+      setEditingCategoryValue('');
+      return;
+    }
+    const nextCategories = availableCategories.map((cat, idx) =>
+      idx === index ? trimmed : cat
+    );
+    const nextItems = draft.galleryItems.map((item) =>
+      item.category === oldName ? {...item, category: trimmed} : item
+    );
+    const updated: SiteContentConfig = {
+      ...draft,
+      galleryCategories: nextCategories,
+      galleryItems: nextItems,
+    };
+    const ok = await persistChanges(
+      updated,
+      `Categoría renombrada a «${trimmed}».`
+    );
+    if (ok) {
+      setDraft(updated);
+      if (imgCategory === oldName) {
+        setImgCategory(trimmed);
+      }
+      setEditingCategoryIndex(null);
+      setEditingCategoryValue('');
+    }
+  };
+
+  const handleRemoveCategory = async (index: number) => {
+    setErrorMsg(null);
+    if (availableCategories.length <= 1) {
+      setErrorMsg('Debe existir al menos una categoría activa.');
+      return;
+    }
+    const targetName = availableCategories[index];
+    if (!targetName) return;
+    const nextCategories = availableCategories.filter((_, idx) => idx !== index);
+    const fallbackCategory = nextCategories[0];
+    const nextItems = draft.galleryItems.map((item) =>
+      item.category === targetName
+        ? {...item, category: fallbackCategory}
+        : item
+    );
+    const updated: SiteContentConfig = {
+      ...draft,
+      galleryCategories: nextCategories,
+      galleryItems: nextItems,
+    };
+    const ok = await persistChanges(
+      updated,
+      `Categoría «${targetName}» eliminada.`
+    );
+    if (ok) {
+      setDraft(updated);
+      if (imgCategory === targetName) {
+        setImgCategory(fallbackCategory);
+      }
+      if (editingCategoryIndex === index) {
+        setEditingCategoryIndex(null);
+        setEditingCategoryValue('');
+      }
     }
   };
 
@@ -1407,16 +1555,19 @@ export function AdminPanelModal({
                     </label>
                     <select
                       value={imgCategory}
-                      onChange={(e) =>
-                        setImgCategory(
-                          e.target.value as Exclude<GalleryCategory, 'Todas'>
-                        )
-                      }
+                      onChange={(e) => setImgCategory(e.target.value)}
                       className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
                     >
-                      <option value="Movilidad primal">Movilidad primal</option>
-                      <option value="Fuerza funcional">Fuerza funcional</option>
-                      <option value="Rehabilitación">Rehabilitación</option>
+                      {(availableCategories.includes(imgCategory)
+                        ? availableCategories
+                        : [...availableCategories, imgCategory]
+                      )
+                        .filter(Boolean)
+                        .map((cat) => (
+                          <option key={cat} value={cat}>
+                            {cat}
+                          </option>
+                        ))}
                     </select>
                   </div>
                   <div>
@@ -1444,6 +1595,144 @@ export function AdminPanelModal({
                       placeholder="2026"
                       className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
                     />
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-[#07090E]">
+                      Administrar categorías ({availableCategories.length}/20)
+                    </p>
+                    <span className="text-[11px] text-slate-500">
+                      Añade, renombra o quita categorías de este selector y de la galería
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {availableCategories.map((cat, idx) => {
+                      const isEditingCat = editingCategoryIndex === idx;
+                      return (
+                        <div
+                          key={`${cat}-${idx}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs shadow-2xs"
+                        >
+                          {isEditingCat ? (
+                            <>
+                              <input
+                                type="text"
+                                maxLength={60}
+                                value={editingCategoryValue}
+                                onChange={(e) =>
+                                  setEditingCategoryValue(e.target.value)
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    void handleSaveRenamedCategory(idx);
+                                  } else if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    setEditingCategoryIndex(null);
+                                    setEditingCategoryValue('');
+                                  }
+                                }}
+                                aria-label={`Renombrar categoría ${cat}`}
+                                className="w-36 rounded border border-[#2563EB] px-2 py-0.5 text-xs text-[#07090E] focus:outline-none"
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                disabled={saving || connectingGoogle}
+                                onClick={() => void handleSaveRenamedCategory(idx)}
+                                aria-label="Guardar nombre de categoría"
+                                className="inline-flex h-6 w-6 items-center justify-center rounded text-emerald-600 hover:bg-emerald-50 disabled:opacity-40"
+                              >
+                                <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingCategoryIndex(null);
+                                  setEditingCategoryValue('');
+                                }}
+                                aria-label="Cancelar edición de categoría"
+                                className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"
+                              >
+                                <X className="h-3.5 w-3.5" aria-hidden="true" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <span className="font-medium text-[#07090E]">
+                                {cat}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={saving || connectingGoogle}
+                                onClick={() => {
+                                  setEditingCategoryIndex(idx);
+                                  setEditingCategoryValue(cat);
+                                  setErrorMsg(null);
+                                }}
+                                aria-label={`Modificar categoría ${cat}`}
+                                title="Modificar categoría"
+                                className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-[#2563EB] disabled:opacity-40"
+                              >
+                                <Pencil className="h-3 w-3" aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={
+                                  saving ||
+                                  connectingGoogle ||
+                                  availableCategories.length <= 1
+                                }
+                                onClick={() => void handleRemoveCategory(idx)}
+                                aria-label={`Quitar categoría ${cat}`}
+                                title={
+                                  availableCategories.length <= 1
+                                    ? 'Debe quedar al menos una categoría'
+                                    : 'Quitar categoría'
+                                }
+                                className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
+                              >
+                                <Trash2 className="h-3 w-3" aria-hidden="true" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      type="text"
+                      maxLength={60}
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          void handleAddCategory();
+                        }
+                      }}
+                      placeholder="Nueva categoría (ej. Terapia manual)"
+                      className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs focus:border-[#2563EB] focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      disabled={
+                        saving ||
+                        connectingGoogle ||
+                        !newCategoryName.trim() ||
+                        availableCategories.length >= 20
+                      }
+                      onClick={() => void handleAddCategory()}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-[#07090E] transition-colors hover:border-[#2563EB] hover:text-[#2563EB] disabled:opacity-50"
+                    >
+                      <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>Añadir categoría</span>
+                    </button>
                   </div>
                 </div>
 

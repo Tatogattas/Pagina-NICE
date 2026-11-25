@@ -35,6 +35,7 @@
         "galleryKicker": { "type": "string", "maxLength": 120 },
         "galleryTitle": { "type": "string", "minLength": 1, "maxLength": 200 },
         "galleryDescription": { "type": "string", "maxLength": 600 },
+        "galleryCategories": { "type": "array" },
         "galleryItems": { "type": "array" },
         "approachKicker": { "type": "string", "maxLength": 120 },
         "approachTitle": { "type": "string", "minLength": 1, "maxLength": 200 },

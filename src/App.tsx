@@ -27,6 +27,7 @@ import {
   SeoStructuredData,
 } from './components/SeoStructuredData';
 import {
+  DEFAULT_GALLERY_CATEGORIES,
   type GalleryCategory,
   type GalleryItem,
   type VideoSourcePreset,
@@ -200,14 +201,27 @@ export default function App() {
       window.removeEventListener('gmp-quota-exceeded', onQuotaExceeded);
   }, []);
 
+  const galleryCategories = useMemo(
+    () =>
+      siteConfig.galleryCategories && siteConfig.galleryCategories.length > 0
+        ? siteConfig.galleryCategories
+        : DEFAULT_GALLERY_CATEGORIES,
+    [siteConfig.galleryCategories]
+  );
+
+  const resolvedActiveCategory =
+    activeCategory === 'Todas' || galleryCategories.includes(activeCategory)
+      ? activeCategory
+      : 'Todas';
+
   const visibleGalleryItems = useMemo(
     () =>
-      activeCategory === 'Todas'
+      resolvedActiveCategory === 'Todas'
         ? siteConfig.galleryItems
         : siteConfig.galleryItems.filter(
-            (item) => item.category === activeCategory
+            (item) => item.category === resolvedActiveCategory
           ),
-    [siteConfig.galleryItems, activeCategory]
+    [siteConfig.galleryItems, resolvedActiveCategory]
   );
 
   const openAdminEditor = (
@@ -762,9 +776,10 @@ export default function App() {
           kicker={siteConfig.galleryKicker}
           title={siteConfig.galleryTitle}
           description={siteConfig.galleryDescription}
+          categories={galleryCategories}
           items={siteConfig.galleryItems}
           isAdmin={isAdmin}
-          activeCategory={activeCategory}
+          activeCategory={resolvedActiveCategory}
           onCategoryChange={setActiveCategory}
           onSelectImage={handleOpenLightbox}
           onEditItem={(item) => openAdminEditor('gallery', item.id)}

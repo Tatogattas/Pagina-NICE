@@ -10,6 +10,7 @@ import {
 import {useState} from 'react';
 import {
   buildAutoplayEmbedUrl,
+  DEFAULT_GALLERY_CATEGORIES,
   extractDomainLabel,
   getGalleryItemThumbnail,
   getItemVideoUrl,
@@ -20,17 +21,11 @@ import {
   type GalleryItem,
 } from '../data/externalMedia';
 
-const CATEGORIES: GalleryCategory[] = [
-  'Todas',
-  'Movilidad primal',
-  'Fuerza funcional',
-  'Rehabilitación',
-];
-
 interface GalleryGridProps {
   kicker: string;
   title: string;
   description: string;
+  categories?: string[];
   items: GalleryItem[];
   isAdmin: boolean;
   activeCategory: GalleryCategory;
@@ -296,6 +291,7 @@ export function GalleryGrid({
   kicker,
   title,
   description,
+  categories,
   items,
   isAdmin,
   activeCategory,
@@ -305,6 +301,13 @@ export function GalleryGrid({
   onRemoveItem,
   onOpenAddImage,
 }: GalleryGridProps) {
+  const filterCategories: GalleryCategory[] = [
+    'Todas',
+    ...(categories && categories.length > 0
+      ? categories
+      : DEFAULT_GALLERY_CATEGORIES),
+  ];
+
   const filteredItems =
     activeCategory === 'Todas'
       ? items
@@ -337,7 +340,7 @@ export function GalleryGrid({
             aria-label="Filtrar galería por especialidad"
             className="flex flex-wrap items-center gap-1 rounded-lg bg-slate-100 p-1"
           >
-            {CATEGORIES.map((category) => {
+            {filterCategories.map((category) => {
               const isSelected = activeCategory === category;
               return (
                 <button
