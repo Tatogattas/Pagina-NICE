@@ -112,8 +112,8 @@ service cloud.firestore {
         && data.videoTitle is string && data.videoTitle.size() <= 200
         && data.heroPillars is list && data.heroPillars.size() <= 6 && (data.heroPillars.size() == 0 || data.heroPillars[0] is map)
         && (!('galleryJumpCtaLabel' in data) || (data.galleryJumpCtaLabel is string && data.galleryJumpCtaLabel.size() <= 100))
-        && (!('ctaLockDelaySeconds' in data) || (data.ctaLockDelaySeconds is int && data.ctaLockDelaySeconds >= 5 && data.ctaLockDelaySeconds <= 3600))
-        && (!('ctaUnlockCooldownSeconds' in data) || (data.ctaUnlockCooldownSeconds is int && data.ctaUnlockCooldownSeconds >= 10 && data.ctaUnlockCooldownSeconds <= 3600))
+        && (!('ctaLockDelaySeconds' in data) || (data.ctaLockDelaySeconds is int && data.ctaLockDelaySeconds >= 5 && data.ctaLockDelaySeconds <= 86400))
+        && (!('ctaUnlockCooldownSeconds' in data) || (data.ctaUnlockCooldownSeconds is int && data.ctaUnlockCooldownSeconds >= 10 && data.ctaUnlockCooldownSeconds <= 86400))
         && (!('ctaAdminUnlockEpoch' in data) || (data.ctaAdminUnlockEpoch is int && data.ctaAdminUnlockEpoch >= 0 && data.ctaAdminUnlockEpoch <= 9999999999999))
         && data.galleryKicker is string && data.galleryKicker.size() <= 120
         && data.galleryTitle is string && data.galleryTitle.size() >= 1 && data.galleryTitle.size() <= 200

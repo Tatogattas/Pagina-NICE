@@ -55,6 +55,18 @@ import {
   subscribeToSiteContent,
 } from './services/siteContentService';
 
+function formatLockCountdown(totalSeconds: number): string {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = safe % 60;
+  const verb = hours === 1 ? 'Falta' : 'Faltan';
+  const hoursLabel = hours === 1 ? '1 hora' : `${hours} horas`;
+  const minsLabel = `${minutes.toString().padStart(2, '0')} min`;
+  const secsLabel = seconds === 1 ? '1 segundo' : `${seconds} segundos`;
+  return `${verb} ${hoursLabel}, ${minsLabel} y ${secsLabel} para que se bloquee`;
+}
+
 const ADMIN_SESSION_KEY = 'monolito_admin_session_v1';
 
 export default function App() {
@@ -708,9 +720,7 @@ export default function App() {
 
             {!isCtaLocked && secondsUntilLock > 0 && (
               <p className="font-mono text-xs text-slate-500 tabular-nums">
-                {secondsUntilLock === 1
-                  ? 'Falta 1 segundo para que se bloquee'
-                  : `Faltan ${secondsUntilLock} segundos para que se bloquee`}
+                {formatLockCountdown(secondsUntilLock)}
               </p>
             )}
 

@@ -64,12 +64,12 @@ export function sanitizeSiteConfig(
     ctaLockDelaySeconds: (() => {
       const val = Number(raw.ctaLockDelaySeconds);
       if (!Number.isFinite(val)) return DEFAULT_SITE_CONFIG.ctaLockDelaySeconds ?? 30;
-      return Math.min(3600, Math.max(5, Math.round(val)));
+      return Math.min(86400, Math.max(5, Math.round(val)));
     })(),
     ctaUnlockCooldownSeconds: (() => {
       const val = Number(raw.ctaUnlockCooldownSeconds);
       if (!Number.isFinite(val)) return DEFAULT_SITE_CONFIG.ctaUnlockCooldownSeconds ?? 60;
-      return Math.min(3600, Math.max(10, Math.round(val)));
+      return Math.min(86400, Math.max(10, Math.round(val)));
     })(),
     ctaAdminUnlockEpoch: (() => {
       const val = Number(raw.ctaAdminUnlockEpoch);
@@ -224,13 +224,13 @@ export function subscribeToSiteContent(
           typeof data.ctaLockDelaySeconds === 'number' &&
           Number.isFinite(data.ctaLockDelaySeconds) &&
           data.ctaLockDelaySeconds >= 5
-            ? Math.round(data.ctaLockDelaySeconds)
+            ? Math.min(86400, Math.round(data.ctaLockDelaySeconds))
             : (DEFAULT_SITE_CONFIG.ctaLockDelaySeconds ?? 30),
         ctaUnlockCooldownSeconds:
           typeof data.ctaUnlockCooldownSeconds === 'number' &&
           Number.isFinite(data.ctaUnlockCooldownSeconds) &&
           data.ctaUnlockCooldownSeconds >= 10
-            ? Math.round(data.ctaUnlockCooldownSeconds)
+            ? Math.min(86400, Math.round(data.ctaUnlockCooldownSeconds))
             : (DEFAULT_SITE_CONFIG.ctaUnlockCooldownSeconds ?? 60),
         ctaAdminUnlockEpoch:
           typeof data.ctaAdminUnlockEpoch === 'number' &&

@@ -1070,12 +1070,12 @@ export function AdminPanelModal({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
                       <label className="block text-xs font-medium text-slate-700">
-                        Segundos para bloquearse tras entrar (5 - 3600)
+                        Segundos para bloquearse tras entrar (5 - 86400 · máx. 24 h)
                       </label>
                       <input
                         type="number"
                         min={5}
-                        max={3600}
+                        max={86400}
                         step={1}
                         value={draft.ctaLockDelaySeconds ?? 30}
                         onChange={(e) => {
@@ -1083,21 +1083,33 @@ export function AdminPanelModal({
                           setDraft({
                             ...draft,
                             ctaLockDelaySeconds: Number.isFinite(num)
-                              ? num
+                              ? Math.min(86400, Math.max(0, Math.round(num)))
                               : 30,
                           });
                         }}
                         className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs focus:border-[#2563EB] focus:outline-none"
                       />
+                      <p className="mt-1 font-mono text-[11px] text-slate-500">
+                        {(() => {
+                          const s = Math.max(
+                            0,
+                            Math.min(86400, Math.round(draft.ctaLockDelaySeconds ?? 30))
+                          );
+                          const h = Math.floor(s / 3600);
+                          const m = Math.floor((s % 3600) / 60);
+                          const sec = s % 60;
+                          return `Equivale a: ${h} h ${m.toString().padStart(2, '0')} min ${sec.toString().padStart(2, '0')} s`;
+                        })()}
+                      </p>
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-700">
-                        Segundos bloqueado hasta desbloqueo (60 = 1 min)
+                        Segundos bloqueado hasta desbloqueo (10 - 86400 · máx. 24 h)
                       </label>
                       <input
                         type="number"
                         min={10}
-                        max={3600}
+                        max={86400}
                         step={1}
                         value={draft.ctaUnlockCooldownSeconds ?? 60}
                         onChange={(e) => {
@@ -1105,12 +1117,27 @@ export function AdminPanelModal({
                           setDraft({
                             ...draft,
                             ctaUnlockCooldownSeconds: Number.isFinite(num)
-                              ? num
+                              ? Math.min(86400, Math.max(0, Math.round(num)))
                               : 60,
                           });
                         }}
                         className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs focus:border-[#2563EB] focus:outline-none"
                       />
+                      <p className="mt-1 font-mono text-[11px] text-slate-500">
+                        {(() => {
+                          const s = Math.max(
+                            0,
+                            Math.min(
+                              86400,
+                              Math.round(draft.ctaUnlockCooldownSeconds ?? 60)
+                            )
+                          );
+                          const h = Math.floor(s / 3600);
+                          const m = Math.floor((s % 3600) / 60);
+                          const sec = s % 60;
+                          return `Equivale a: ${h} h ${m.toString().padStart(2, '0')} min ${sec.toString().padStart(2, '0')} s`;
+                        })()}
+                      </p>
                     </div>
                   </div>
 
