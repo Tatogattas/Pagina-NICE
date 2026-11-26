@@ -26,6 +26,11 @@ function clampStr(value: string, max: number, fallback = ''): string {
   return clean.slice(0, max);
 }
 
+function clampSingleLineUrl(value: unknown, max: number, fallback = ''): string {
+  const raw = typeof value === 'string' ? value : fallback;
+  return raw.replace(/[\r\n]+/g, '').trim().slice(0, max);
+}
+
 function sanitizeGalleryCategories(rawCategories: unknown): string[] {
   if (!Array.isArray(rawCategories)) {
     return [...DEFAULT_GALLERY_CATEGORIES];
@@ -55,19 +60,27 @@ export function sanitizeSiteConfig(
   return {
     brandName: clampStr(raw.brandName, 80, DEFAULT_SITE_CONFIG.brandName) || DEFAULT_SITE_CONFIG.brandName,
     logoUrl: (() => {
-      const candidate = clampStr(raw.logoUrl ?? DEFAULT_SITE_CONFIG.logoUrl, 1000);
+      const candidate = clampSingleLineUrl(raw.logoUrl ?? DEFAULT_SITE_CONFIG.logoUrl, 1000);
       if (!candidate) return '';
-      return /^https?:\/\/.+/.test(candidate) ? candidate : DEFAULT_SITE_CONFIG.logoUrl;
+      return /^https?:\/\/[^\r\n]+$/.test(candidate) ? candidate : DEFAULT_SITE_CONFIG.logoUrl;
     })(),
     heroKicker: clampStr(raw.heroKicker, 120),
     heroTitle: clampStr(raw.heroTitle, 200, DEFAULT_SITE_CONFIG.heroTitle) || DEFAULT_SITE_CONFIG.heroTitle,
     heroDescription: clampStr(raw.heroDescription, 600),
     heroCtaLabel: clampStr(raw.heroCtaLabel, 60, DEFAULT_SITE_CONFIG.heroCtaLabel) || DEFAULT_SITE_CONFIG.heroCtaLabel,
-    videoUrl:
-      clampStr(raw.videoUrl, 1000, DEFAULT_SITE_CONFIG.videoUrl) ||
-      DEFAULT_SITE_CONFIG.videoUrl,
+    videoUrl: (() => {
+      const candidate = clampSingleLineUrl(
+        raw.videoUrl,
+        1000,
+        DEFAULT_SITE_CONFIG.videoUrl
+      );
+      return candidate.length >= 8 && /^https?:\/\/[^\r\n]+$/.test(candidate)
+        ? candidate
+        : DEFAULT_SITE_CONFIG.videoUrl;
+    })(),
     videoTitle: clampStr(raw.videoTitle, 200),
     heroPillars: (Array.isArray(raw.heroPillars) ? raw.heroPillars : [])
+      .filter((p): p is NonNullable<typeof p> => Boolean(p && typeof p === 'object'))
       .slice(0, 6)
       .map((p, idx) => ({
         id: clampStr(p.id || `pillar-${idx + 1}`, 64),
@@ -104,6 +117,7 @@ export function sanitizeSiteConfig(
       const cleanCategories = sanitizeGalleryCategories(raw.galleryCategories);
       const fallbackCategory = cleanCategories[0] || DEFAULT_GALLERY_CATEGORIES[0];
       return (Array.isArray(raw.galleryItems) ? raw.galleryItems : [])
+        .filter((item): item is NonNullable<typeof item> => Boolean(item && typeof item === 'object'))
         .slice(0, 50)
         .map((item, idx) => {
           const normalizedImage = normalizeImageUrl(item.imageUrl || '');
@@ -112,8 +126,8 @@ export function sanitizeSiteConfig(
             !normalizedVideo && normalizedImage && isKnownVideoUrl(normalizedImage)
               ? normalizedImage
               : normalizedVideo;
-          const cleanVideoUrl = clampStr(inferredVideo, 1000);
-          const cleanImageUrl = clampStr(
+          const cleanVideoUrl = clampSingleLineUrl(inferredVideo, 1000);
+          const cleanImageUrl = clampSingleLineUrl(
             normalizedImage === cleanVideoUrl ? '' : normalizedImage,
             1000
           );
@@ -140,6 +154,7 @@ export function sanitizeSiteConfig(
     approachTitle: clampStr(raw.approachTitle, 200, DEFAULT_SITE_CONFIG.approachTitle) || DEFAULT_SITE_CONFIG.approachTitle,
     approachDescription: clampStr(raw.approachDescription, 600),
     approachItems: (Array.isArray(raw.approachItems) ? raw.approachItems : [])
+      .filter((a): a is NonNullable<typeof a> => Boolean(a && typeof a === 'object'))
       .slice(0, 10)
       .map((a, idx) => ({
         id: clampStr(a.id || `approach-${idx + 1}`, 64),
@@ -168,9 +183,9 @@ export function sanitizeSiteConfig(
       240
     ),
     locationMapsUrl: (() => {
-      const candidate = clampStr(raw.locationMapsUrl ?? '', 1000);
+      const candidate = clampSingleLineUrl(raw.locationMapsUrl ?? '', 1000);
       if (!candidate) return '';
-      return /^https:\/\/.+/.test(candidate) ? candidate : '';
+      return /^https:\/\/[^\r\n]+$/.test(candidate) ? candidate : '';
     })(),
     locationLat:
       typeof raw.locationLat === 'number' &&
@@ -187,9 +202,9 @@ export function sanitizeSiteConfig(
         ? Number(raw.locationLng.toFixed(6))
         : null,
     whatsappWebhookUrl: (() => {
-      const candidate = clampStr(raw.whatsappWebhookUrl ?? '', 1000);
+      const candidate = clampSingleLineUrl(raw.whatsappWebhookUrl ?? '', 1000);
       if (!candidate) return '';
-      return /^https:\/\/.+/.test(candidate) ? candidate : '';
+      return /^https:\/\/[^\r\n]+$/.test(candidate) ? candidate : '';
     })(),
     footerTagline: clampStr(raw.footerTagline, 300),
     footerCopyright: clampStr(raw.footerCopyright, 120),

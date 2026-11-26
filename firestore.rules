@@ -24,7 +24,8 @@ service cloud.firestore {
 
     function isBootstrappedAdmin() {
       return isSignedIn()
-        && request.auth.token.email == 'taroret134@gmail.com'
+        && request.auth.token.email is string
+        && request.auth.token.email.lower() == 'taroret134@gmail.com'
         && request.auth.token.email_verified == true;
     }
 
@@ -135,8 +136,8 @@ service cloud.firestore {
         && (!('locationDescription' in data) || (data.locationDescription is string && data.locationDescription.size() <= 600))
         && (!('locationAddress' in data) || (data.locationAddress is string && data.locationAddress.size() <= 240))
         && (!('locationMapsUrl' in data) || (data.locationMapsUrl is string && data.locationMapsUrl.size() <= 1000 && (data.locationMapsUrl == '' || data.locationMapsUrl.matches('^https://.+'))))
-        && (!('locationLat' in data) || (data.locationLat == null || ((data.locationLat is float || data.locationLat is int) && data.locationLat >= -90 && data.locationLat <= 90)))
-        && (!('locationLng' in data) || (data.locationLng == null || ((data.locationLng is float || data.locationLng is int) && data.locationLng >= -180 && data.locationLng <= 180)))
+        && (!('locationLat' in data) || (data.locationLat == null || (data.locationLat is number && data.locationLat >= -90 && data.locationLat <= 90)))
+        && (!('locationLng' in data) || (data.locationLng == null || (data.locationLng is number && data.locationLng >= -180 && data.locationLng <= 180)))
         && data.footerTagline is string && data.footerTagline.size() <= 300
         && data.footerCopyright is string && data.footerCopyright.size() <= 120
         && data.updatedByUid is string && data.updatedByUid.size() >= 1 && data.updatedByUid.size() <= 128 && data.updatedByUid == request.auth.uid
@@ -241,48 +242,7 @@ service cloud.firestore {
       allow update: if isValidId(contentId)
         && contentId == 'main'
         && isAdmin()
-        && isValidSiteContent(incoming())
-        && incoming().diff(existing()).affectedKeys().hasOnly([
-          'brandName',
-          'logoUrl',
-          'whatsappWebhookUrl',
-          'heroKicker',
-          'heroTitle',
-          'heroDescription',
-          'heroCtaLabel',
-          'videoUrl',
-          'videoTitle',
-          'heroPillars',
-          'galleryJumpCtaLabel',
-          'ctaLockDelaySeconds',
-          'ctaUnlockCooldownSeconds',
-          'ctaAdminUnlockEpoch',
-          'galleryKicker',
-          'galleryTitle',
-          'galleryDescription',
-          'galleryCategories',
-          'galleryItems',
-          'approachKicker',
-          'approachTitle',
-          'approachDescription',
-          'approachItems',
-          'contactKicker',
-          'contactTitle',
-          'contactDescription',
-          'contactEmail',
-          'contactLocation',
-          'locationKicker',
-          'locationTitle',
-          'locationDescription',
-          'locationAddress',
-          'locationMapsUrl',
-          'locationLat',
-          'locationLng',
-          'footerTagline',
-          'footerCopyright',
-          'updatedByUid',
-          'updatedAt'
-        ]);
+        && isValidSiteContent(incoming());
       allow delete: if isValidId(contentId) && contentId == 'main' && isAdmin();
     }
 

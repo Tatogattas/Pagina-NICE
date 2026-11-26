@@ -315,14 +315,22 @@ export default function App() {
             }
       );
       if (auth.currentUser) {
-        await adminUnlockDeviceLock(deviceLockKey, unlockEpoch);
+        try {
+          await adminUnlockDeviceLock(deviceLockKey, unlockEpoch);
+        } catch {
+          // Local override remains active while cloud sync recovers
+        }
       }
     }
     if (auth.currentUser) {
-      await handlePublishConfig({
-        ...siteConfig,
-        ctaAdminUnlockEpoch: unlockEpoch,
-      });
+      try {
+        await handlePublishConfig({
+          ...siteConfig,
+          ctaAdminUnlockEpoch: unlockEpoch,
+        });
+      } catch {
+        // Error already surfaced via AdminPanelModal or logged cleanly without crashing UI
+      }
     }
   };
 
