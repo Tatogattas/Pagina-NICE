@@ -105,6 +105,9 @@ export function AdminPanelModal({
   const [locatingAddress, setLocatingAddress] = useState(false);
   const [thumbFailedUrl, setThumbFailedUrl] = useState('');
   const [inquiries, setInquiries] = useState<StoredContactInquiry[]>([]);
+  const [updatingInquiryId, setUpdatingInquiryId] = useState<string | null>(
+    null
+  );
   const [ctaLocks, setCtaLocks] = useState<AdminCtaLockEntry[]>([]);
   const placesLib = useMapsLibrary('places');
   const mapsApiKey = getGoogleMapsApiKey();
@@ -736,6 +739,30 @@ export function AdminPanelModal({
         setEditingCategoryIndex(null);
         setEditingCategoryValue('');
       }
+    }
+  };
+
+  const handleToggleInquiryDispatched = async (
+    inquiryId: string,
+    nextDispatched: boolean
+  ) => {
+    setErrorMsg(null);
+    const authed = await ensureCloudAuth();
+    if (!authed) return;
+    setUpdatingInquiryId(inquiryId);
+    try {
+      await markInquiryDispatched(inquiryId, nextDispatched);
+      flashSaved(
+        nextDispatched
+          ? 'Consulta marcada como lista.'
+          : 'Consulta marcada como pendiente.'
+      );
+    } catch {
+      setErrorMsg(
+        'No se pudo actualizar el estado de la consulta en Firestore. Verifica tu sesión de administrador.'
+      );
+    } finally {
+      setUpdatingInquiryId(null);
     }
   };
 
@@ -2121,7 +2148,7 @@ export function AdminPanelModal({
                                   : 'bg-amber-50 text-amber-700'
                               }`}
                             >
-                              {inq.dispatched ? 'Reenviado' : 'Pendiente'}
+                              {inq.dispatched ? 'Listo' : 'Pendiente'}
                             </span>
                           </div>
                           <p className="text-xs text-slate-600">
@@ -2140,7 +2167,9 @@ export function AdminPanelModal({
                             href={originForwardWa}
                             target="_blank"
                             rel="noopener noreferrer"
-                            onClick={() => void markInquiryDispatched(inq.id, true)}
+                            onClick={() =>
+                              void handleToggleInquiryDispatched(inq.id, true)
+                            }
                             className="inline-flex items-center gap-1 rounded-lg bg-[#2563EB] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#1D4ED8]"
                           >
                             <Send className="h-3.5 w-3.5" aria-hidden="true" />
@@ -2150,14 +2179,26 @@ export function AdminPanelModal({
                           </a>
                           <button
                             type="button"
+                            disabled={updatingInquiryId === inq.id}
                             onClick={() =>
-                              void markInquiryDispatched(inq.id, !inq.dispatched)
+                              void handleToggleInquiryDispatched(
+                                inq.id,
+                                !inq.dispatched
+                              )
                             }
-                            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-[#07090E] transition-colors hover:border-[#2563EB] hover:text-[#2563EB]"
+                            className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
+                              inq.dispatched
+                                ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                : 'border-slate-300 bg-white text-[#07090E] hover:border-[#2563EB] hover:text-[#2563EB]'
+                            }`}
                           >
                             <Check className="h-3.5 w-3.5" aria-hidden="true" />
                             <span>
-                              {inq.dispatched ? 'Reenviado' : 'Marcar listo'}
+                              {updatingInquiryId === inq.id
+                                ? 'Guardando...'
+                                : inq.dispatched
+                                  ? 'Marcado listo'
+                                  : 'Marcar listo'}
                             </span>
                           </button>
                           {replyWa && (
